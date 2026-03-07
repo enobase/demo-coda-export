@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    // Environment setup
+    "lib": ["ES2022"],
+    "target": "ES2022",
+    "module": "Preserve",
+    "moduleDetection": "force",
+    "allowJs": false,
+
+    // Bundler mode
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+
+    // Strict mode + best practices
+    "strict": true,
+    "skipLibCheck": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noPropertyAccessFromIndexSignature": false,
+    "exactOptionalPropertyTypes": true
+  },
+  "include": ["src/**/*", "index.ts"],
+  "exclude": ["node_modules", "dist"]
+}

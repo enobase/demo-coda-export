@@ -1,0 +1,7 @@
+Date started (UTC),Date completed (UTC),ID,Type,Description,Reference,Payer,Card number,Orig currency,Orig amount,Payment currency,Amount,Fee,Balance,Account,Beneficiary account number,Beneficiary sort code or routing number,Beneficiary IBAN,Beneficiary BIC
+2026-02-01 09:00:00,2026-02-01 09:05:00,txn_001,transfer,Invoice payment to Supplier SA,INV-2026-001,ACME BVBA,,EUR,-1200.00,EUR,-1200.00,0.00,8800.00,Main,,, BE68 5390 0754 7034,BBRUBEBB
+2026-02-02 10:00:00,2026-02-02 10:01:00,txn_002,card_payment,Office supplies,,ACME BVBA,**** 5678,EUR,-85.50,EUR,-85.50,0.00,8714.50,Main,,,,
+2026-02-03 14:00:00,2026-02-03 14:30:00,txn_003,transfer,Client payment received,+++090/9337/55493+++,,,EUR,3500.00,EUR,3500.00,0.00,12214.50,Main,,,BE71 0961 2345 6769,GEBABEBB
+2026-02-05 08:00:00,2026-02-05 08:10:00,txn_004,transfer,Salary payment,SAL-2026-02,ACME BVBA,,EUR,-2800.00,EUR,-2800.00,0.00,9414.50,Main,,,BE43 0689 9999 9501,GKCCBEBB
+2026-02-07 16:00:00,2026-02-07 16:05:00,txn_005,fee,Monthly account fee,,,,EUR,-15.00,EUR,-15.00,0.00,9399.50,Main,,,,
+2026-02-10 11:00:00,2026-02-10 11:00:00,txn_006,exchange,Currency exchange USD to EUR,,,,USD,1000.00,EUR,920.50,0.00,10320.00,Main,,,,
