@@ -3,6 +3,9 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "bin": {
+    "coda-export": "./src/cli.ts"
+  },
   "scripts": {
     "test": "bun test",
     "lint": "bunx biome check src/",
