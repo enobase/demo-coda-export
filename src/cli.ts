@@ -19,6 +19,7 @@
  */
 
 import { readFileSync, writeFileSync } from "node:fs";
+import { analyzeFile, formatReport } from "./compare.ts";
 import { encodeLatin1 } from "./encoding.ts";
 import type { CodaConfig } from "./mapper.ts";
 import { mapToCoda, validateConfig } from "./mapper.ts";
@@ -204,6 +205,7 @@ Usage:
 Commands:
   convert   Convert a CSV file to a CODA statement
   validate  Validate an existing CODA file
+  compare   Structurally compare two CODA files (no PII)
 
 Options:
   --help, -h  Show this help message
@@ -249,6 +251,31 @@ Usage:
 Options:
   --input <path>  Path to the CODA file to validate
   --help          Show this help message
+`.trimStart();
+
+const HELP_COMPARE = `
+coda-export compare — Structurally compare two CODA files
+
+Usage:
+  coda-export compare --reference <real-bank.cod> --generated <our-output.cod>
+
+Compares metadata and structural patterns only.
+NO amounts, NO names, NO account numbers, NO PII are included in the output.
+
+Options:
+  --reference <path>  Path to the reference CODA file (e.g. a real bank file)
+  --generated <path>  Path to the generated CODA file to compare against
+  --help              Show this help message
+
+What is compared:
+  - Line counts and line length conformance
+  - Version code (Record 0, position 127)
+  - Account structure code (Record 1, position 1)
+  - Count of each record type (0, 1, 21, 22, 23, 31, 32, 33, 4, 8, 9)
+  - Transaction code families (Record 21, positions 53-54)
+  - Communication types (Record 21, position 61)
+  - Record 22 chain pattern (always between 21 and 23?)
+  - File encoding (Latin-1 vs UTF-8)
 `.trimStart();
 
 // ---------------------------------------------------------------------------
@@ -387,6 +414,54 @@ function cmdValidate(flags: Record<string, string>): void {
 	}
 }
 
+function cmdCompare(flags: Record<string, string>): void {
+	if (flags.help === "true") {
+		process.stdout.write(HELP_COMPARE);
+		return;
+	}
+
+	const referencePath = flags.reference;
+	const generatedPath = flags.generated;
+
+	if (!referencePath) {
+		process.stderr.write("Error: --reference is required\n");
+		process.exit(1);
+	}
+	if (!generatedPath) {
+		process.stderr.write("Error: --generated is required\n");
+		process.exit(1);
+	}
+
+	let refBytes: Uint8Array;
+	let refContent: string;
+	try {
+		refBytes = new Uint8Array(readFileSync(referencePath));
+		refContent = new TextDecoder("latin1").decode(refBytes);
+	} catch (e) {
+		process.stderr.write(
+			`Error: Cannot read reference file "${referencePath}": ${(e as NodeJS.ErrnoException).message}\n`,
+		);
+		process.exit(1);
+	}
+
+	let genBytes: Uint8Array;
+	let genContent: string;
+	try {
+		genBytes = new Uint8Array(readFileSync(generatedPath));
+		genContent = new TextDecoder("latin1").decode(genBytes);
+	} catch (e) {
+		process.stderr.write(
+			`Error: Cannot read generated file "${generatedPath}": ${(e as NodeJS.ErrnoException).message}\n`,
+		);
+		process.exit(1);
+	}
+
+	const reference = analyzeFile(refContent, refBytes);
+	const generated = analyzeFile(genContent, genBytes);
+
+	process.stdout.write(formatReport({ reference, generated }));
+}
+
 // ---------------------------------------------------------------------------
 // Main entry point
 // ---------------------------------------------------------------------------
@@ -394,8 +469,10 @@ function cmdValidate(flags: Record<string, string>): void {
 export function main(argv: string[]): void {
 	const { command, flags } = parseArgs(argv);
 
+	const knownCommands = new Set(["convert", "validate", "compare"]);
+
 	if (!command || flags.help === "true") {
-		if (command && command !== "convert" && command !== "validate") {
+		if (command && !knownCommands.has(command)) {
 			process.stderr.write(`Error: Unknown command "${command}"\n\n`);
 			process.stdout.write(HELP_MAIN);
 			process.exit(1);
@@ -410,6 +487,9 @@ export function main(argv: string[]): void {
 			break;
 		case "validate":
 			cmdValidate(flags);
+			break;
+		case "compare":
+			cmdCompare(flags);
 			break;
 		default:
 			process.stderr.write(`Error: Unknown command "${command}"\n\n`);
