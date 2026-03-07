@@ -2,8 +2,8 @@
 
 Convert neobank CSV exports to Belgian CODA bank statement format.
 
-This tool reads transaction exports from Revolut Personal, Revolut Business, and Qonto and
-produces CODA 2.6 files — the fixed-width 128-character-per-line format defined by Febelfin and
+This tool reads transaction exports from Revolut Personal, Revolut Business, Qonto, N26, and Wise
+and produces CODA 2.6 files — the fixed-width 128-character-per-line format defined by Febelfin and
 accepted by Belgian accounting software (Exact, Yuki, BOB50, etc.). It is a **writer only**: it
 does not parse existing CODA files.
 
@@ -14,6 +14,8 @@ does not parse existing CODA files.
 | Revolut Personal CSV | `Started Date`, `Completed Date`, `State`, `Balance` (no `Beneficiary IBAN`) | Type, Completed Date, Description, Amount, Fee, Currency, State, Balance |
 | Revolut Business CSV | `Beneficiary IBAN` in header | Date completed (UTC), Type, Description, Reference, Amount, Fee, Currency, Beneficiary IBAN, Beneficiary BIC |
 | Qonto CSV (full export) | `Settlement date (UTC)` + `Total amount (incl. VAT)` | Status, Settlement date (UTC), Operation date (UTC), Total amount (incl. VAT), Currency, Counterparty name, Payment method, IBAN, Reference, Category |
+| N26 CSV | `Partner Iban` + `Account Name` + `Amount (EUR)` in header | Booking Date, Value Date, Partner Name, Partner Iban, Type, Payment Reference, Amount (EUR) |
+| Wise CSV | `TransferWise ID` in header | Date, Amount, Currency, Description, Payment Reference, Running Balance, Payer Name, Payee Name, Payee Account Number, Merchant, Total Fees |
 
 Only settled/completed rows are imported. Pending or failed rows are skipped.
 
@@ -37,6 +39,9 @@ bun run src/cli.ts convert --input transactions.csv \
 
 # Validate a CODA file
 bun run src/cli.ts validate --input statement.cod
+
+# Structurally compare two CODA files (no PII in output)
+bun run src/cli.ts compare --a statement-v1.cod --b statement-v2.cod
 
 # Show all options
 bun run src/cli.ts --help
@@ -132,6 +137,22 @@ Family and operation codes are mapped from the source transaction type as follow
 | `direct_debit` | debit | `05` | `01` | Direct debit |
 | _(other)_ | any | `01` | `01` | Credit transfer (fallback) |
 
+**N26**
+
+| Source `Type` | Direction | CODA family | CODA operation | Meaning |
+|---|---|---|---|---|
+| `MasterCard Payment` | debit | `43` | `01` | Card payment |
+| `Direct Debit` | debit | `05` | `01` | Direct debit |
+| `Credit Transfer` / `Income` | credit | `01` | `01` | Credit transfer received |
+| `Outgoing Transfer` | debit | `01` | `37` | Credit transfer sent |
+| _(other)_ | any | `01` | `01` | Credit transfer (fallback) |
+
+**Wise**
+
+Wise is primarily a transfer service. All transactions map to family `01`: credits use operation
+`01` (transfer received), debits use operation `37` (transfer sent). No card or direct-debit
+operations are distinguished.
+
 These mappings are best-effort approximations. See [SCOPE.md](SCOPE.md) for details on what is
 and is not guaranteed.
 
@@ -166,6 +187,8 @@ Then register it in `src/parsers/index.ts`:
 import { myBankParser } from "./mybank.ts"
 
 const PARSERS: InputParser[] = [
+  wiseParser,
+  n26Parser,
   revolutBusinessParser,
   revolutPersonalParser,
   qontoParser,
@@ -175,13 +198,41 @@ const PARSERS: InputParser[] = [
 
 Also extend the `InputFormat` type and `BankTransaction.source` union in `src/parsers/types.ts`.
 
+## Output encoding
+
+CODA output is **Latin-1 (ISO-8859-1)** by default. This matches real Belgian CODA files.
+Characters outside the Latin-1 range (e.g. emoji, CJK) are replaced with `?` before the
+128-character line constraint is enforced. Pass `encoding: 'utf-8'` to `serializeCoda()` to
+suppress this sanitization.
+
 ## Running tests
 
 ```bash
 bun test
 ```
 
-428 tests, all in `src/__tests__/` and `src/parsers/__tests__/`.
+611 tests across 10 files in `src/__tests__/` and `src/parsers/__tests__/`.
+
+## Validation
+
+The `validate` CLI command checks structural correctness (line length, record type sequence,
+field positions) of any CODA file.
+
+For pycoda round-trip validation (requires Python and `pip install pycoda`):
+
+```bash
+bash scripts/setup-roundtrip.sh   # install pycoda
+bun test                          # round-trip tests run automatically when pycoda is available
+```
+
+The round-trip tests generate a CODA file from the Revolut Personal fixture, parse it back with
+pycoda, and verify that account number, balances, transaction count, amounts, and dates are
+preserved. The tests are skipped gracefully when `python3` or `pycoda` is not found.
+
+Note: pycoda's `is_valid_coda()` regex requires positions [1:5] of the header to be `0000`.
+Our serializer writes `DDMM` there (per the Febelfin CODA 2.6 spec). The round-trip tests
+bypass this regex and call `parse()` directly; see [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md) for
+details.
 
 ## License
 

@@ -8,15 +8,20 @@ bank CODA files or production accounting software.
 
 ## CODA specification ambiguities
 
-### Record 0 positions [1:5] vs [5:11] — date duplication
+### Record 0 positions [1:5] vs [5:11] — DDMM vs 0000
 
 Record 0 contains the creation date twice: at positions `[1:5]` (DDMM, 4 chars) and `[5:11]`
-(full DDMMYY, 6 chars). The DDMM block is the first four characters of the date field, so both
-regions encode the same date. The purpose of the apparent duplication is not explained in the
-sources consulted. We currently write the DDMM slice at `[1:5]` and the full date at `[5:11]`.
+(full DDMMYY, 6 chars). The Febelfin CODA 2.6 spec places the creation date (DDMM) at positions
+[1:5]; we follow this interpretation and write the date digits there.
 
-Some CODA samples seen in the wild appear to treat `[1:5]` differently (as a numeric file
-sequence or bank reference). No definitive answer was found.
+However, pycoda's `is_valid_coda()` header-validation regex requires `0000` at positions [1:5].
+This means pycoda's validator rejects our output as invalid, even though pycoda's own `parse()`
+method handles the file correctly. It is unknown whether Belgian banks ever write `0000` at
+[1:5] (treating it as a numeric file sequence or leaving it blank), or whether all banks write
+DDMM as specified.
+
+The round-trip tests bypass `is_valid_coda()` and call `parse()` directly. Our interpretation
+may be wrong for some software.
 
 ### Record 9 record count — what counts?
 
@@ -48,44 +53,6 @@ For EUR (2 decimal places), this means amounts like EUR 42.50 are encoded as `42
 neobank exports. This appears to be by design in the CODA spec but has not been confirmed
 against real files.
 
-### Floating-point rounding at the boundary
-
-We use `Math.round(|amount| * 1000)` to convert to milli-cents. This is correct for amounts with
-at most 3 significant decimal digits. Amounts with more decimal digits (which should not appear
-in financial data but could in test fixtures) are silently rounded to the nearest milli-cent.
-
----
-
-## Character encoding
-
-### UTF-8 vs Latin-1 in real CODA files
-
-Belgian accounting software from the 1990s–2000s used Latin-1 (ISO-8859-1) character encoding.
-The CODA spec predates Unicode. Real CODA files from Belgian banks are likely Latin-1 encoded.
-
-This tool writes UTF-8. If a counterparty name or description contains non-ASCII characters
-(accented letters common in French and Dutch), the output will be valid UTF-8 but may not be
-accepted by software that expects Latin-1, or may display incorrectly if software opens the file
-with the wrong encoding.
-
-No attempt is made to transliterate or drop non-ASCII characters.
-
----
-
-## Date and timezone handling
-
-### Local time vs UTC in formatDate()
-
-The `formatDate()` function uses `Date.getDate()`, `Date.getMonth()`, and `Date.getFullYear()` —
-which are local-time methods, not UTC. The parsers create all dates as UTC midnight
-(`new Date("YYYY-MM-DDT00:00:00Z")`). When `formatDate()` is called in a timezone with a
-negative UTC offset (e.g. UTC-5), a UTC-midnight date will appear as the previous calendar day
-in local time, producing an off-by-one date in the CODA output.
-
-In practice, Belgian accounting software runs in CET/CEST (UTC+1/UTC+2), so this is not an
-issue for the intended deployment. But it is a latent bug for users running the tool in
-UTC-negative timezones.
-
 ---
 
 ## Whether real Belgian accounting software would accept our output
@@ -98,9 +65,8 @@ We have no confirmation that the files produced by this tool can be successfully
 - Isabel Connect
 - Any other Belgian accounting or bank reconciliation package
 
-The output passes our own structural validator but that validator was written alongside the
-serializer and tests the same field positions, so it cannot catch systematic interpretation
-errors.
+The output passes our own structural validator and pycoda's `parse()` method, but neither can
+catch systematic interpretation errors in field positions or transaction code assignments.
 
 ---
 
@@ -137,24 +103,10 @@ throws an error.
 
 ---
 
-## Fee handling
+## N26 column name variations
 
-Both Revolut parsers parse the `Fee` column into `BankTransaction.fee`. However, this fee
-amount is **not** mapped into a separate CODA transaction. It is stored in the `BankTransaction`
-but the mapper ignores it. This means:
-
-1. The running balance in the CODA output may not match the source balance column exactly if
-   fees are significant.
-2. Accounting software that reconciles against a bank balance may find discrepancies.
-
-The correct treatment of fees (separate debit transaction vs. folded into the main transaction
-amount) depends on how the bank actually books them, which varies by institution.
-
----
-
-## OGM/VCS check digit validation
-
-The OGM/VCS structured communication format includes a 2-digit check digit embedded in the
-reference number. This tool detects the pattern `+++NNN/NNNN/NNNNN+++` and treats it as
-structured communication, but does **not** validate the check digit. A reference with an invalid
-check digit will be passed through and marked as structured communication type `'1'`.
+N26 column names may vary depending on the account language or locale. The parser has been
+tested against English-locale exports. German-locale exports may use different column names
+(e.g. `Betrag (EUR)` instead of `Amount (EUR)`). Detection relies on `Partner Iban`,
+`Account Name`, and `Amount (EUR)` being present; a German-locale export may not be
+auto-detected.
