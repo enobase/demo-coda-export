@@ -9,16 +9,17 @@
  *   coda-export convert --input transactions.csv --output statement.cod \
  *     --account-iban BE68539007547034 \
  *     --account-holder "ACME BVBA" \
- *     --bank-id 539 \
- *     --opening-balance 1234.56 \
- *     --opening-date 2026-01-01
+ *     --opening-balance 1234.56
  *
  *   coda-export convert --input transactions.csv --config account.json
  *   coda-export validate --input statement.cod
+ *   coda-export init
  *   coda-export --help
  */
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { analyzeFile, formatReport } from "./compare.ts";
 import { encodeLatin1 } from "./encoding.ts";
 import type { CodaConfig } from "./mapper.ts";
@@ -27,6 +28,9 @@ import type { InputFormat } from "./parsers/index.ts";
 import { detectFormat, parseTransactions } from "./parsers/index.ts";
 import { serializeCoda } from "./serializer.ts";
 import { validate } from "./validator.ts";
+import { extractBankIdFromIban, lookupBic } from "./belgian-banks.ts";
+import { inferOutputPath, inferOpeningDate } from "./defaults.ts";
+import { prompt as promptUser, isTTY, logDerived } from "./prompt.ts";
 
 // ---------------------------------------------------------------------------
 // Arg parsing
@@ -41,7 +45,7 @@ interface ParsedArgs {
 /**
  * Parse process.argv into a simple structure.
  * Supports --key value pairs and bare positional arguments.
- * Boolean flags (--dry-run, --help) are stored as the string "true".
+ * Boolean flags (--dry-run, --help, --version) are stored as the string "true".
  */
 export function parseArgs(argv: string[]): ParsedArgs {
 	const flags: Record<string, string> = {};
@@ -55,6 +59,12 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
 		if (arg === "--help" || arg === "-h") {
 			flags.help = "true";
+			i++;
+			continue;
+		}
+
+		if (arg === "--version") {
+			flags.version = "true";
 			i++;
 			continue;
 		}
@@ -131,14 +141,27 @@ export function buildCodaConfig(
 	flags: Record<string, string>,
 	configFile?: ConfigFileShape,
 ): CodaConfig {
-	// Merge: config file first, then CLI flags override
-	const bankId = flags["bank-id"] ?? configFile?.bankId ?? "";
+	// Resolve IBAN first so we can auto-derive bankId and bic from it
 	const accountIban = flags["account-iban"] ?? configFile?.accountIban ?? "";
+
+	// Auto-derive bankId from IBAN if not explicitly provided
+	let bankId = flags["bank-id"] ?? configFile?.bankId ?? "";
+	if (!bankId && accountIban) {
+		const derived = extractBankIdFromIban(accountIban);
+		if (derived) bankId = derived;
+	}
+
+	// Auto-derive BIC from bankId if not explicitly provided
+	let bic = flags.bic ?? configFile?.bic;
+	if (!bic && bankId) {
+		const derivedBic = lookupBic(bankId);
+		if (derivedBic) bic = derivedBic;
+	}
+
 	const accountCurrency = flags["account-currency"] ?? configFile?.accountCurrency ?? "EUR";
 	const accountHolderName = flags["account-holder"] ?? configFile?.accountHolderName ?? "";
 	const accountDescription = flags["account-description"] ?? configFile?.accountDescription;
 	const applicationCode = flags["application-code"] ?? configFile?.applicationCode;
-	const bic = flags.bic ?? configFile?.bic;
 	const companyId = flags["company-id"] ?? configFile?.companyId;
 	const statementSequenceRaw =
 		flags["statement-sequence"] ?? configFile?.statementSequence?.toString();
@@ -206,9 +229,11 @@ Commands:
   convert   Convert a CSV file to a CODA statement
   validate  Validate an existing CODA file
   compare   Structurally compare two CODA files (no PII)
+  init      Create a config file interactively
 
 Options:
-  --help, -h  Show this help message
+  --help, -h   Show this help message
+  --version    Show version number
 
 Run "coda-export <command> --help" for command-specific options.
 `.trimStart();
@@ -220,26 +245,30 @@ Usage:
   coda-export convert --input <file.csv> [--output <file.cod>] [options]
   coda-export convert --input <file.csv> --config <account.json>
 
-Required options (if not in config file):
+Config is auto-discovered at ./coda-export.json or ~/.coda-export.json.
+
+Required options (if not in config file and not prompted interactively):
   --input <path>             Path to the input CSV file
   --account-iban <IBAN>      Account IBAN (e.g. BE68539007547034)
   --account-holder <name>    Account holder name (max 26 chars)
-  --bank-id <id>             Bank identification number (1-3 chars)
   --opening-balance <amount> Opening balance (e.g. 1234.56)
-  --opening-date <YYYY-MM-DD> Date of opening balance
 
-Optional options:
-  --output <path>            Output file path (default: stdout)
+Optional options (auto-derived or prompted when running interactively):
+  --bank-id <id>             Bank identification number (auto-derived from Belgian IBANs)
+  --opening-date <YYYY-MM-DD> Date of opening balance (inferred from CSV if omitted)
+  --output <path>            Output file path (default: <input>.cod in TTY mode, stdout otherwise)
   --config <path>            JSON config file (merged with CLI flags)
   --format <fmt>             Force input format: revolut-personal,
                              revolut-business, or qonto
   --account-currency <code>  Currency code (default: EUR)
   --account-description <s>  Account description (max 35 chars)
-  --bic <bic>                Bank BIC (11 chars)
+  --bic <bic>                Bank BIC (11 chars, auto-derived from Belgian IBANs)
   --company-id <id>          Company identification number
   --statement-sequence <n>   Statement sequence number (default: 1)
   --dry-run                  Show what would be generated without writing
   --help                     Show this help message
+
+In interactive (TTY) mode, missing required values will be prompted.
 `.trimStart();
 
 const HELP_VALIDATE = `
@@ -278,20 +307,48 @@ What is compared:
   - File encoding (Latin-1 vs UTF-8)
 `.trimStart();
 
+const HELP_INIT = `
+coda-export init — Create a config file interactively
+
+Usage:
+  coda-export init
+
+Prompts for your account details (IBAN, holder name, currency) and creates
+a config file. Bank ID and BIC are auto-derived from Belgian IBANs.
+
+The config file is auto-discovered at ./coda-export.json or ~/.coda-export.json.
+
+Options:
+  --help  Show this help message
+`.trimStart();
+
 // ---------------------------------------------------------------------------
 // Command handlers
 // ---------------------------------------------------------------------------
 
-function cmdConvert(flags: Record<string, string>): void {
+async function cmdConvert(flags: Record<string, string>): Promise<void> {
 	if (flags.help === "true") {
 		process.stdout.write(HELP_CONVERT);
 		return;
 	}
 
-	// Load config file if provided
+	// Load config file if explicitly provided
 	let configFile: ConfigFileShape | undefined;
 	if (flags.config) {
 		configFile = loadConfigFile(flags.config);
+	}
+
+	// Auto-discover config file if not explicitly provided
+	if (!flags.config) {
+		const localConfig = "coda-export.json";
+		const globalConfig = join(homedir(), ".coda-export.json");
+		if (existsSync(localConfig)) {
+			configFile = loadConfigFile(localConfig);
+			process.stderr.write(`Loaded config from ${localConfig}\n`);
+		} else if (existsSync(globalConfig)) {
+			configFile = loadConfigFile(globalConfig);
+			process.stderr.write(`Loaded config from ${globalConfig}\n`);
+		}
 	}
 
 	// Input file
@@ -311,23 +368,59 @@ function cmdConvert(flags: Record<string, string>): void {
 		process.exit(1);
 	}
 
-	// Build config
-	let config: CodaConfig;
+	// Detect / force format
+	const forcedFormat = flags.format as InputFormat | undefined;
+
+	// Parse transactions first (so we can infer opening-date)
+	let transactions: ReturnType<typeof parseTransactions>;
 	try {
-		config = buildCodaConfig(flags, configFile);
-		validateConfig(config);
+		transactions = parseTransactions(csvContent, forcedFormat);
 	} catch (e) {
 		process.stderr.write(`Error: ${(e as Error).message}\n`);
 		process.exit(1);
 	}
 
-	// Detect / force format
-	const forcedFormat = flags.format as InputFormat | undefined;
+	// Infer opening-date from transactions if not provided
+	if (!flags["opening-date"] && !configFile?.openingBalanceDate) {
+		const inferred = inferOpeningDate(transactions);
+		if (inferred) {
+			const yyyy = inferred.getUTCFullYear();
+			const mm = String(inferred.getUTCMonth() + 1).padStart(2, "0");
+			const dd = String(inferred.getUTCDate()).padStart(2, "0");
+			flags["opening-date"] = `${yyyy}-${mm}-${dd}`;
+			process.stderr.write(`  ✓ Opening date: ${flags["opening-date"]} (day before earliest transaction)\n`);
+		}
+	}
 
-	// Parse transactions
-	let transactions: ReturnType<typeof parseTransactions>;
+	// Interactive mode: show auto-derived values and prompt for missing required ones
+	if (isTTY()) {
+		const accountIban = flags["account-iban"] ?? configFile?.accountIban;
+		if (accountIban) {
+			const derivedBankId = extractBankIdFromIban(accountIban);
+			if (derivedBankId) logDerived("Bank ID", derivedBankId);
+			const derivedBic = lookupBic(derivedBankId ?? "");
+			if (derivedBic) logDerived("BIC", derivedBic);
+		}
+
+		if (!flags["account-iban"] && !configFile?.accountIban) {
+			flags["account-iban"] = await promptUser("Account IBAN (e.g. BE68539007547034)");
+		}
+		if (!flags["account-holder"] && !configFile?.accountHolderName) {
+			flags["account-holder"] = await promptUser("Account holder name (max 26 chars)");
+		}
+		if (!flags["opening-balance"] && configFile?.openingBalance === undefined) {
+			flags["opening-balance"] = await promptUser("Opening balance (e.g. 1234.56)");
+		}
+		if (!flags["opening-date"] && !configFile?.openingBalanceDate) {
+			flags["opening-date"] = await promptUser("Opening balance date (YYYY-MM-DD)");
+		}
+	}
+
+	// Build config
+	let config: CodaConfig;
 	try {
-		transactions = parseTransactions(csvContent, forcedFormat);
+		config = buildCodaConfig(flags, configFile);
+		validateConfig(config);
 	} catch (e) {
 		process.stderr.write(`Error: ${(e as Error).message}\n`);
 		process.exit(1);
@@ -354,8 +447,10 @@ function cmdConvert(flags: Record<string, string>): void {
 		return;
 	}
 
+	// Determine output path
+	const outputPath = flags.output ?? (process.stdout.isTTY ? inferOutputPath(inputPath) : undefined);
+
 	// Write output encoded as Latin-1 (ISO-8859-1), matching real CODA files.
-	const outputPath = flags.output;
 	if (outputPath) {
 		try {
 			writeFileSync(outputPath, encodeLatin1(codaContent));
@@ -462,14 +557,68 @@ function cmdCompare(flags: Record<string, string>): void {
 	process.stdout.write(formatReport({ reference, generated }));
 }
 
+async function cmdInit(flags: Record<string, string>): Promise<void> {
+	if (flags.help === "true") {
+		process.stdout.write(HELP_INIT);
+		return;
+	}
+
+	const configPath = await promptUser("Config file path", "coda-export.json");
+	const iban = await promptUser("Account IBAN (e.g. BE68539007547034)");
+
+	// Validate IBAN format
+	if (!/^[A-Z]{2}\d{2}/i.test(iban.replace(/\s/g, ""))) {
+		process.stderr.write("Error: Invalid IBAN format\n");
+		process.exit(1);
+	}
+
+	const normalizedIban = iban.replace(/\s/g, "").toUpperCase();
+
+	// Auto-derive bank-id and BIC
+	const bankId = extractBankIdFromIban(normalizedIban);
+	const bic = bankId ? lookupBic(bankId) : null;
+
+	if (bankId) logDerived("Bank ID", bankId);
+	if (bic) logDerived("BIC", bic);
+
+	const holder = await promptUser("Account holder name (max 26 chars)");
+	const currency = await promptUser("Account currency", "EUR");
+	const companyId = await promptUser("Company ID / enterprise number (optional, press Enter to skip)");
+	const description = await promptUser("Account description (optional, press Enter to skip)");
+
+	const config: Record<string, unknown> = {
+		accountIban: normalizedIban,
+		accountHolderName: holder,
+		accountCurrency: currency,
+	};
+
+	if (bankId) config.bankId = bankId;
+	if (bic) config.bic = bic;
+	if (companyId) config.companyId = companyId;
+	if (description) config.accountDescription = description;
+
+	const json = JSON.stringify(config, null, 2) + "\n";
+
+	writeFileSync(configPath, json);
+	process.stderr.write(`\nConfig saved to ${configPath}\n`);
+	process.stderr.write(`\nUsage:\n  coda-export convert --input transactions.csv --opening-balance 1234.56\n`);
+}
+
 // ---------------------------------------------------------------------------
 // Main entry point
 // ---------------------------------------------------------------------------
 
-export function main(argv: string[]): void {
+export async function main(argv: string[]): Promise<void> {
 	const { command, flags } = parseArgs(argv);
 
-	const knownCommands = new Set(["convert", "validate", "compare"]);
+	// Handle --version before anything else
+	if (flags.version === "true") {
+		const pkgJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8"));
+		process.stdout.write(`${pkgJson.version}\n`);
+		return;
+	}
+
+	const knownCommands = new Set(["convert", "validate", "compare", "init"]);
 
 	if (!command || flags.help === "true") {
 		if (command && !knownCommands.has(command)) {
@@ -483,13 +632,16 @@ export function main(argv: string[]): void {
 
 	switch (command) {
 		case "convert":
-			cmdConvert(flags);
+			await cmdConvert(flags);
 			break;
 		case "validate":
 			cmdValidate(flags);
 			break;
 		case "compare":
 			cmdCompare(flags);
+			break;
+		case "init":
+			await cmdInit(flags);
 			break;
 		default:
 			process.stderr.write(`Error: Unknown command "${command}"\n\n`);
@@ -499,4 +651,7 @@ export function main(argv: string[]): void {
 }
 
 // Run when invoked directly
-main(process.argv.slice(2));
+main(process.argv.slice(2)).catch((err) => {
+	process.stderr.write(`Error: ${(err as Error).message}\n`);
+	process.exit(1);
+});

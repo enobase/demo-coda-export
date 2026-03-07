@@ -33,53 +33,75 @@ Only settled/completed rows are imported. Pending or failed rows are skipped.
 ## Quick start
 
 ```bash
-# Install dependencies
 bun install
 
-# Convert with a config file
-bun run src/cli.ts convert --input transactions.csv --config account.json
+# 1. Create a config file (one-time setup)
+bun run src/cli.ts init
+# → Prompts for IBAN, holder name, currency
+# → Auto-derives bank ID and BIC from your IBAN
+# → Saves to coda-export.json
 
-# Convert with CLI flags
-bun run src/cli.ts convert --input transactions.csv \
-  --account-iban BE68539007547034 \
-  --account-holder "ACME BVBA" \
-  --bank-id 539 \
-  --opening-balance 1234.56 \
-  --opening-date 2026-01-01 \
-  --output statement.cod
+# 2. Convert your CSV to CODA
+bun run src/cli.ts convert --input transactions.csv --opening-balance 1234.56
+# → Auto-loads coda-export.json
+# → Infers opening date from CSV
+# → Writes transactions.cod
 
-# Validate a CODA file
-bun run src/cli.ts validate --input statement.cod
-
-# Structurally compare two CODA files (no PII in output)
-bun run src/cli.ts compare --a statement-v1.cod --b statement-v2.cod
-
-# Show all options
-bun run src/cli.ts --help
-bun run src/cli.ts convert --help
+# 3. Validate the output
+bun run src/cli.ts validate --input transactions.cod
 ```
 
-## Config file format
+That's it. If you skip step 1, the convert command will interactively prompt for any missing information.
 
-Pass `--config account.json` to avoid repeating flags. CLI flags override config file values.
+## Getting started
 
+### Config file
+
+Run `coda-export init` to create a config file interactively. It will prompt for your account details and auto-derive what it can from your IBAN.
+
+The config file is automatically discovered at:
+1. `./coda-export.json` (project-local, checked first)
+2. `~/.coda-export.json` (user-global fallback)
+
+You can also specify a path explicitly with `--config path/to/config.json`.
+
+Example config:
 ```json
 {
-  "bankId": "539",
   "accountIban": "BE68539007547034",
-  "accountCurrency": "EUR",
   "accountHolderName": "ACME BVBA",
-  "accountDescription": "Business current account",
-  "bic": "KREDBEBB",
-  "companyId": "0123456789",
-  "statementSequence": 1,
-  "openingBalance": 1234.56,
-  "openingBalanceDate": "2026-01-01"
+  "accountCurrency": "EUR",
+  "bankId": "539",
+  "bic": "KREDBEBB"
 }
 ```
 
-All fields except `openingBalance` and `openingBalanceDate` are optional when the
-corresponding CLI flags are provided. `accountCurrency` defaults to `"EUR"` if omitted.
+Note: `openingBalance` and `openingBalanceDate` are **not** stored in the config because they change with every conversion.
+
+### What you need to provide per conversion
+
+| Parameter | Required? | Notes |
+|---|---|---|
+| `--input` | Yes | Path to your CSV export |
+| `--opening-balance` | Yes | Your account balance before the first transaction |
+| `--opening-date` | No | Defaults to the day before the earliest transaction |
+| `--output` | No | Defaults to `<input-name>.cod` |
+| `--bank-id` | No | Auto-derived from Belgian IBANs |
+| `--bic` | No | Auto-derived from bank ID |
+
+### Interactive mode
+
+When running in a terminal and required values are missing, the CLI will prompt you instead of erroring:
+
+```
+$ bun run src/cli.ts convert --input transactions.csv
+  ✓ Bank ID: 539 (derived from IBAN)
+  ✓ BIC: KREDBEBB (derived from IBAN)
+  Opening balance (e.g. 1234.56): 5000.00
+  ✓ Opening date: 2026-02-28 (day before earliest transaction)
+
+  Ready to convert 42 transactions → transactions.cod
+```
 
 ## Library API
 
@@ -222,7 +244,7 @@ suppress this sanitization.
 bun test
 ```
 
-611 tests across 10 files in `src/__tests__/` and `src/parsers/__tests__/`.
+680 tests across 13 files in `src/__tests__/` and `src/parsers/__tests__/`.
 
 ## Validation
 
