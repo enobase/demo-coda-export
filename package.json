@@ -1,8 +1,12 @@
 {
-  "name": "demo-coda-export",
-  "module": "index.ts",
+  "name": "@enobase/coda-export",
+  "version": "0.1.0",
+  "description": "Convert neobank CSV exports (Revolut, Qonto) to Belgian CODA bank statement format",
+  "main": "src/index.ts",
+  "module": "src/index.ts",
+  "types": "src/index.ts",
   "type": "module",
-  "private": true,
+  "license": "MIT",
   "bin": {
     "coda-export": "./src/cli.ts"
   },
