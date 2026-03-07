@@ -1,0 +1,19 @@
+{
+  "name": "demo-coda-export",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "bun test",
+    "lint": "bunx biome check src/",
+    "lint:fix": "bunx biome check --write src/",
+    "format": "bunx biome format --write src/"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.6",
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}
