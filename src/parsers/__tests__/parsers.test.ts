@@ -9,7 +9,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { detectDelimiter, parseCsv, parseCsvLine } from "../csv.ts";
+import { detectDelimiter, parseCsv, parseCsvLine, validateColumns } from "../csv.ts";
 import { detectFormat, parseTransactions } from "../index.ts";
 import { qontoParser } from "../qonto.ts";
 import { revolutBusinessParser } from "../revolut-business.ts";
@@ -485,7 +485,7 @@ describe("Qonto — fixture parsing", () => {
 	test("sixth (last) transaction: Accountant BVBA with structured reference", () => {
 		const tx = getAt(txns, 4);
 		expect(tx.counterpartyName).toBe("Accountant BVBA");
-		expect(tx.reference).toBe("+++456/7890/12345+++");
+		expect(tx.reference).toBe("+++456/7890/12373+++");
 		expect(tx.amount).toBe(-890.0);
 	});
 
@@ -666,5 +666,177 @@ describe("BankTransaction field types", () => {
 			expect(typeof tx.currency).toBe("string");
 			expect(tx.currency.length).toBeGreaterThan(0);
 		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// validateColumns utility
+// ---------------------------------------------------------------------------
+
+describe("validateColumns", () => {
+	test("does not throw when all required columns are present", () => {
+		expect(() => validateColumns(["A", "B", "C"], ["A", "B"], "TestParser")).not.toThrow();
+	});
+
+	test("does not throw when extra columns are present", () => {
+		expect(() => validateColumns(["A", "B", "C", "Extra"], ["A", "B"], "TestParser")).not.toThrow();
+	});
+
+	test("throws when one required column is missing", () => {
+		expect(() => validateColumns(["A", "C"], ["A", "B", "C"], "TestParser")).toThrow(/"B"/);
+	});
+
+	test("error message includes parser name", () => {
+		expect(() => validateColumns(["A"], ["A", "Missing"], "MyParser")).toThrow("MyParser");
+	});
+
+	test("lists ALL missing columns in the error", () => {
+		expect(() => validateColumns(["A"], ["A", "X", "Y"], "TestParser")).toThrow(
+			/"X".*"Y"|"Y".*"X"/,
+		);
+	});
+
+	test("column matching is case-sensitive — wrong case triggers error", () => {
+		expect(() =>
+			validateColumns(["amount", "Currency"], ["Amount", "Currency"], "TestParser"),
+		).toThrow(/"Amount"/);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Column validation — Revolut Personal
+// ---------------------------------------------------------------------------
+
+describe("Revolut Personal — column validation", () => {
+	const VALID_HEADER =
+		"Type,Product,Started Date,Completed Date,Description,Amount,Fee,Currency,State,Balance\n" +
+		"CARD_PAYMENT,Current,2026-01-01,2026-01-01,Shop,-10.00,0.00,EUR,COMPLETED,90.00\n";
+
+	test("valid headers pass without error", () => {
+		expect(() => revolutPersonalParser.parse(VALID_HEADER)).not.toThrow();
+	});
+
+	test("missing one required column throws naming the column and parser", () => {
+		const csv =
+			"Type,Product,Started Date,Completed Date,Description,Fee,Currency,State,Balance\n" +
+			"CARD_PAYMENT,Current,2026-01-01,2026-01-01,Shop,0.00,EUR,COMPLETED,90.00\n";
+		expect(() => revolutPersonalParser.parse(csv)).toThrow(/Revolut Personal/);
+		expect(() => revolutPersonalParser.parse(csv)).toThrow(/"Amount"/);
+	});
+
+	test("missing multiple required columns lists all of them", () => {
+		const csv =
+			"Type,Product,Started Date,Completed Date,Fee,Balance\n" +
+			"CARD_PAYMENT,Current,2026-01-01,2026-01-01,0.00,90.00\n";
+		expect(() => revolutPersonalParser.parse(csv)).toThrow(/"Amount"/);
+		expect(() => revolutPersonalParser.parse(csv)).toThrow(/"Currency"/);
+		expect(() => revolutPersonalParser.parse(csv)).toThrow(/"State"/);
+		expect(() => revolutPersonalParser.parse(csv)).toThrow(/"Description"/);
+	});
+
+	test("extra unexpected columns do not cause errors", () => {
+		const csv =
+			"Type,Product,Started Date,Completed Date,Description,Amount,Fee,Currency,State,Balance,ExtraCol\n" +
+			"CARD_PAYMENT,Current,2026-01-01,2026-01-01,Shop,-10.00,0.00,EUR,COMPLETED,90.00,extra\n";
+		expect(() => revolutPersonalParser.parse(csv)).not.toThrow();
+	});
+
+	test("casing mismatch triggers error (case-sensitive)", () => {
+		const csv =
+			"Type,Product,Started Date,completed date,Description,Amount,Fee,Currency,State,Balance\n" +
+			"CARD_PAYMENT,Current,2026-01-01,2026-01-01,Shop,-10.00,0.00,EUR,COMPLETED,90.00\n";
+		expect(() => revolutPersonalParser.parse(csv)).toThrow(/"Completed Date"/);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Column validation — Revolut Business
+// ---------------------------------------------------------------------------
+
+describe("Revolut Business — column validation", () => {
+	const VALID_HEADER =
+		"Date started (UTC),Date completed (UTC),ID,Type,Description,Reference,Payer,Card number,Orig currency,Orig amount,Payment currency,Amount,Fee,Balance,Account,Beneficiary account number,Beneficiary sort code or routing number,Beneficiary IBAN,Beneficiary BIC\n" +
+		"2026-02-01 09:00:00,2026-02-01 10:00:00,txn1,transfer,ACME,,,,EUR,-1200.00,EUR,-1200.00,0.00,8800.00,Main,,,,\n";
+
+	test("valid headers pass without error", () => {
+		expect(() => revolutBusinessParser.parse(VALID_HEADER)).not.toThrow();
+	});
+
+	test("missing one required column throws naming the column and parser", () => {
+		const csv =
+			"Date started (UTC),Date completed (UTC),ID,Type,Description,Reference,Payer,Card number,Orig currency,Orig amount,Fee,Balance,Account,Beneficiary account number,Beneficiary sort code or routing number,Beneficiary IBAN,Beneficiary BIC\n" +
+			"2026-02-01 09:00:00,2026-02-01 10:00:00,txn1,transfer,ACME,,,,EUR,-1200.00,0.00,8800.00,Main,,,,\n";
+		expect(() => revolutBusinessParser.parse(csv)).toThrow(/Revolut Business/);
+		expect(() => revolutBusinessParser.parse(csv)).toThrow(/"Payment currency"/);
+	});
+
+	test("missing multiple required columns lists all of them", () => {
+		const csv =
+			"Date started (UTC),Date completed (UTC),ID,Reference,Fee,Balance\n" +
+			"2026-02-01 09:00:00,2026-02-01 10:00:00,txn1,REF,0.00,8800.00\n";
+		expect(() => revolutBusinessParser.parse(csv)).toThrow(/"Amount"/);
+		expect(() => revolutBusinessParser.parse(csv)).toThrow(/"Payment currency"/);
+		expect(() => revolutBusinessParser.parse(csv)).toThrow(/"Type"/);
+		expect(() => revolutBusinessParser.parse(csv)).toThrow(/"Description"/);
+	});
+
+	test("extra unexpected columns do not cause errors", () => {
+		const csv =
+			"Date started (UTC),Date completed (UTC),ID,Type,Description,Reference,Payer,Card number,Orig currency,Orig amount,Payment currency,Amount,Fee,Balance,Account,Beneficiary account number,Beneficiary sort code or routing number,Beneficiary IBAN,Beneficiary BIC,NewCol\n" +
+			"2026-02-01 09:00:00,2026-02-01 10:00:00,txn1,transfer,ACME,,,,EUR,-1200.00,EUR,-1200.00,0.00,8800.00,Main,,,,,extra\n";
+		expect(() => revolutBusinessParser.parse(csv)).not.toThrow();
+	});
+
+	test("casing mismatch triggers error (case-sensitive)", () => {
+		const csv =
+			"Date started (UTC),date completed (UTC),ID,Type,Description,Reference,Payer,Card number,Orig currency,Orig amount,Payment currency,Amount,Fee,Balance,Account,Beneficiary account number,Beneficiary sort code or routing number,Beneficiary IBAN,Beneficiary BIC\n" +
+			"2026-02-01 09:00:00,2026-02-01 10:00:00,txn1,transfer,ACME,,,,EUR,-1200.00,EUR,-1200.00,0.00,8800.00,Main,,,,\n";
+		expect(() => revolutBusinessParser.parse(csv)).toThrow(/"Date completed \(UTC\)"/);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Column validation — Qonto
+// ---------------------------------------------------------------------------
+
+describe("Qonto — column validation", () => {
+	const VALID_HEADER =
+		"Status,Settlement date (UTC),Operation date (UTC),Total amount (incl. VAT),Currency,Counterparty name,Payment method,Transaction ID,IBAN,Reference,Category,Note,VAT amount,Initiator\n" +
+		"settled,2026-01-10 00:00:00,2026-01-10 00:00:00,-150.00,EUR,Proximus,direct_debit,qt1,BE95001234567890,+++123/4567/89002+++,Telecom,,,\n";
+
+	test("valid headers pass without error", () => {
+		expect(() => qontoParser.parse(VALID_HEADER)).not.toThrow();
+	});
+
+	test("missing one required column throws naming the column and parser", () => {
+		const csv =
+			"Status,Settlement date (UTC),Operation date (UTC),Currency,Counterparty name,Payment method,Transaction ID,IBAN,Reference,Category,Note,VAT amount,Initiator\n" +
+			"settled,2026-01-10 00:00:00,2026-01-10 00:00:00,EUR,Proximus,direct_debit,qt1,BE95001234567890,+++123/4567/89002+++,Telecom,,,\n";
+		expect(() => qontoParser.parse(csv)).toThrow(/Qonto/);
+		expect(() => qontoParser.parse(csv)).toThrow(/"Total amount \(incl\. VAT\)"/);
+	});
+
+	test("missing multiple required columns lists all of them", () => {
+		const csv =
+			"Operation date (UTC),Counterparty name,Payment method,Transaction ID,IBAN,Reference\n" +
+			"2026-01-10 00:00:00,Proximus,direct_debit,qt1,BE95001234567890,+++123/4567/89002+++\n";
+		expect(() => qontoParser.parse(csv)).toThrow(/"Status"/);
+		expect(() => qontoParser.parse(csv)).toThrow(/"Settlement date \(UTC\)"/);
+		expect(() => qontoParser.parse(csv)).toThrow(/"Total amount \(incl\. VAT\)"/);
+		expect(() => qontoParser.parse(csv)).toThrow(/"Currency"/);
+	});
+
+	test("extra unexpected columns do not cause errors", () => {
+		const csv =
+			"Status,Settlement date (UTC),Operation date (UTC),Total amount (incl. VAT),Currency,Counterparty name,Payment method,Transaction ID,IBAN,Reference,Category,Note,VAT amount,Initiator,BrandNewCol\n" +
+			"settled,2026-01-10 00:00:00,2026-01-10 00:00:00,-150.00,EUR,Proximus,direct_debit,qt1,BE95001234567890,+++123/4567/89002+++,Telecom,,,,extra\n";
+		expect(() => qontoParser.parse(csv)).not.toThrow();
+	});
+
+	test("casing mismatch triggers error (case-sensitive)", () => {
+		const csv =
+			"status,Settlement date (UTC),Operation date (UTC),Total amount (incl. VAT),Currency,Counterparty name,Payment method,Transaction ID,IBAN,Reference,Category,Note,VAT amount,Initiator\n" +
+			"settled,2026-01-10 00:00:00,2026-01-10 00:00:00,-150.00,EUR,Proximus,direct_debit,qt1,BE95001234567890,+++123/4567/89002+++,Telecom,,,\n";
+		expect(() => qontoParser.parse(csv)).toThrow(/"Status"/);
 	});
 });

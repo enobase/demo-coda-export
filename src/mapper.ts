@@ -72,8 +72,38 @@ const OGM_PATTERN = /^\+\+\+(\d{3})\/(\d{4})\/(\d{5})\+\+\+$/;
 const OGM_DIGITS_PATTERN = /^(\d{3})(\d{4})(\d{5})$/;
 
 /**
+ * Validate the modulo-97 check digit of a Belgian OGM/VCS structured communication.
+ *
+ * @param digits - Exactly 12 numeric characters (no separators).
+ *                 The first 10 are the base number; the last 2 are the check digit.
+ * @returns true when the check digit is correct, false otherwise.
+ */
+export function validateOgmCheckDigit(digits: string): boolean {
+	const base = parseInt(digits.slice(0, 10), 10);
+	const check = parseInt(digits.slice(10, 12), 10);
+	const expected = base % 97 === 0 ? 97 : base % 97;
+	return check === expected;
+}
+
+/**
+ * Format 10 base digits into a canonical +++NNN/NNNN/NNNNN+++ OGM string,
+ * computing and appending the correct modulo-97 check digit.
+ *
+ * @param first10 - Exactly 10 numeric characters (leading zeros preserved).
+ * @returns The formatted OGM string, e.g. "+++123/4567/89002+++".
+ */
+export function formatOgm(first10: string): string {
+	const base = parseInt(first10, 10);
+	const check = base % 97 === 0 ? 97 : base % 97;
+	const checkStr = String(check).padStart(2, "0");
+	const digits = first10 + checkStr;
+	return `+++${digits.slice(0, 3)}/${digits.slice(3, 7)}/${digits.slice(7, 12)}+++`;
+}
+
+/**
  * Detect whether a string is a Belgian structured communication (OGM/VCS).
- * Returns the canonical +++NNN/NNNN/NNNNN+++ string if it matches, or null.
+ * Returns the canonical +++NNN/NNNN/NNNNN+++ string if it matches AND the
+ * modulo-97 check digit is valid, or null otherwise.
  */
 export function detectOgm(value: string): string | null {
 	if (!value) return null;
@@ -81,11 +111,15 @@ export function detectOgm(value: string): string | null {
 
 	const ogmMatch = OGM_PATTERN.exec(trimmed);
 	if (ogmMatch) {
+		const digits = ogmMatch[1] + ogmMatch[2] + ogmMatch[3];
+		if (!validateOgmCheckDigit(digits)) return null;
 		return `+++${ogmMatch[1]}/${ogmMatch[2]}/${ogmMatch[3]}+++`;
 	}
 
 	const digitMatch = OGM_DIGITS_PATTERN.exec(trimmed);
 	if (digitMatch) {
+		const digits = digitMatch[1] + digitMatch[2] + digitMatch[3];
+		if (!validateOgmCheckDigit(digits)) return null;
 		return `+++${digitMatch[1]}/${digitMatch[2]}/${digitMatch[3]}+++`;
 	}
 
@@ -446,9 +480,13 @@ export function mapToCoda(transactions: BankTransaction[], config: CodaConfig): 
 	let totalDebit = 0n;
 	let totalCredit = 0n;
 
+	// Sequence numbers must be unique across all emitted Record 21s (main + fee).
+	// We maintain a running counter rather than using the loop index directly.
+	let nextSeq = 1;
+
 	for (let i = 0; i < transactions.length; i++) {
 		const tx = transactions[i];
-		const txSeq = i + 1;
+		const txSeq = nextSeq++;
 
 		const amountSign = toSignCode(tx.amount);
 		const amount = toMilliCents(tx.amount);
@@ -525,6 +563,32 @@ export function mapToCoda(transactions: BankTransaction[], config: CodaConfig): 
 				isLastRecord: true,
 			};
 			movementRecords.push(rec23);
+		}
+
+		// Fee record — emit a separate debit Record 21 when the transaction carries a fee
+		if (tx.fee !== undefined && tx.fee !== 0) {
+			const feeSeq = nextSeq++;
+			const feeAmount = toMilliCents(tx.fee); // toMilliCents always returns abs value
+			const feeSign: SignCode = "1"; // fees are always debits
+
+			const feeRec21: Record21Movement = {
+				recordType: "21",
+				sequenceNumber: feeSeq,
+				detailNumber: 0,
+				bankReference: "",
+				amountSign: feeSign,
+				amount: feeAmount,
+				entryDate,
+				transactionCode: { type: "1", family: "35", operation: "01", category: "000" },
+				communicationType: "0",
+				communication: `Fee: ${tx.description}`.slice(0, 53),
+				valueDate,
+				statementSequenceNumber: seqNum,
+				globalizationCode: 0,
+				hasContinuation: false,
+			};
+			movementRecords.push(feeRec21);
+			totalDebit += feeAmount;
 		}
 	}
 

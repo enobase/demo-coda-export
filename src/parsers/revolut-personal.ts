@@ -8,11 +8,14 @@
  * Only COMPLETED rows are imported.
  */
 
-import { parseCsv } from "./csv.ts";
+import { parseCsv, validateColumns } from "./csv.ts";
 import type { BankTransaction, InputFormat, InputParser } from "./types.ts";
 
 /** Signature columns that identify this format */
 const SIGNATURE_COLUMNS = ["Started Date", "Completed Date", "State", "Balance"];
+
+/** Columns that must be present for the parser to operate correctly */
+const REQUIRED_COLUMNS = ["Completed Date", "Amount", "Currency", "State", "Description"];
 
 /** Map three-letter English month abbreviations to zero-based month index */
 const MONTH_ABBR: Readonly<Record<string, number>> = {
@@ -91,6 +94,13 @@ export const revolutPersonalParser: InputParser = {
 
 	parse(content: string): BankTransaction[] {
 		const rows = parseCsv(content);
+		if (rows.length > 0) {
+			validateColumns(
+				Object.keys(rows[0] as Record<string, string>),
+				REQUIRED_COLUMNS,
+				"Revolut Personal",
+			);
+		}
 		const transactions: BankTransaction[] = [];
 
 		for (const row of rows) {

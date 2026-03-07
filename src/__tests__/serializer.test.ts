@@ -144,19 +144,19 @@ describe("formatAmount", () => {
 
 describe("formatDate", () => {
 	it("formats a Date object as DDMMYY", () => {
-		// 17 October 2017
-		const d = new Date(2017, 9, 17); // month is 0-indexed
+		// 17 October 2017 — created as UTC midnight so UTC methods return the right date
+		const d = new Date("2017-10-17T00:00:00Z");
 		expect(formatDate(d)).toBe("171017");
 	});
 
 	it("pads single-digit day and month", () => {
 		// 1 January 2023
-		const d = new Date(2023, 0, 1);
+		const d = new Date("2023-01-01T00:00:00Z");
 		expect(formatDate(d)).toBe("010123");
 	});
 
 	it("uses last 2 digits of year", () => {
-		const d = new Date(2000, 5, 15);
+		const d = new Date("2000-06-15T00:00:00Z");
 		expect(formatDate(d)).toBe("150600");
 	});
 

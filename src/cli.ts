@@ -19,6 +19,7 @@
  */
 
 import { readFileSync, writeFileSync } from "node:fs";
+import { encodeLatin1 } from "./encoding.ts";
 import type { CodaConfig } from "./mapper.ts";
 import { mapToCoda, validateConfig } from "./mapper.ts";
 import type { InputFormat } from "./parsers/index.ts";
@@ -159,7 +160,15 @@ export function buildCodaConfig(
 			"Missing required option: --opening-date (or openingBalanceDate in config file)",
 		);
 	}
-	const openingBalanceDate = new Date(openingDateRaw);
+	// If the user passes a bare date like "2026-01-01" (no time component),
+	// JavaScript parses it as UTC midnight — which is correct. But if they
+	// pass a local-time string like "2026-01-01T00:00:00" (no Z), it would
+	// be treated as local time and could shift to the previous day in UTC+
+	// timezones. Normalise: append T00:00:00Z if there is no time component.
+	const openingDateNormalised = /^\d{4}-\d{2}-\d{2}$/.test(openingDateRaw)
+		? `${openingDateRaw}T00:00:00Z`
+		: openingDateRaw;
+	const openingBalanceDate = new Date(openingDateNormalised);
 	if (Number.isNaN(openingBalanceDate.getTime())) {
 		throw new Error(`Invalid opening date: "${openingDateRaw}"`);
 	}
@@ -318,11 +327,11 @@ function cmdConvert(flags: Record<string, string>): void {
 		return;
 	}
 
-	// Write output
+	// Write output encoded as Latin-1 (ISO-8859-1), matching real CODA files.
 	const outputPath = flags.output;
 	if (outputPath) {
 		try {
-			writeFileSync(outputPath, codaContent, "utf-8");
+			writeFileSync(outputPath, encodeLatin1(codaContent));
 			process.stderr.write(`Written to ${outputPath}\n`);
 		} catch (e) {
 			process.stderr.write(
@@ -332,7 +341,7 @@ function cmdConvert(flags: Record<string, string>): void {
 		}
 	} else {
 		// stdout
-		process.stdout.write(codaContent);
+		process.stdout.write(encodeLatin1(codaContent));
 	}
 }
 

@@ -113,6 +113,26 @@ export interface ParseCsvOptions {
  *
  * @throws {Error} if the content has no lines at all.
  */
+/**
+ * Validate that all required columns are present in the actual column list.
+ *
+ * @throws {Error} listing every missing column name and the parser that
+ *   performed the check.
+ */
+export function validateColumns(
+	actualColumns: string[],
+	requiredColumns: string[],
+	parserName: string,
+): void {
+	const missing = requiredColumns.filter((col) => !actualColumns.includes(col));
+	if (missing.length > 0) {
+		throw new Error(
+			`${parserName}: missing required column(s): ${missing.map((c) => `"${c}"`).join(", ")}. ` +
+				`Found columns: ${actualColumns.map((c) => `"${c}"`).join(", ")}`,
+		);
+	}
+}
+
 export function parseCsv(content: string, options?: ParseCsvOptions): CsvRow[] {
 	// Normalise line endings
 	const rawLines = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");

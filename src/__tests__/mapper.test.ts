@@ -22,12 +22,14 @@ import {
 	buildCounterpartyAccountRaw,
 	buildTransactionCode,
 	detectOgm,
+	formatOgm,
 	ibanToAccountStructure,
 	mapToCoda,
 	splitCommunication,
 	toMilliCents,
 	toSignCode,
 	validateConfig,
+	validateOgmCheckDigit,
 } from "../mapper.ts";
 import { parseTransactions } from "../parsers/index.ts";
 import type { BankTransaction } from "../parsers/types.ts";
@@ -324,7 +326,55 @@ describe("detectOgm", () => {
 	});
 
 	it("trims whitespace before matching", () => {
-		expect(detectOgm("  +++456/7890/12345+++  ")).toBe("+++456/7890/12345+++");
+		expect(detectOgm("  +++456/7890/12373+++  ")).toBe("+++456/7890/12373+++");
+	});
+
+	it("returns null for OGM with invalid check digit", () => {
+		expect(detectOgm("+++123/4567/89099+++")).toBeNull();
+	});
+
+	it("returns null for bare digits with invalid check digit", () => {
+		expect(detectOgm("123456789099")).toBeNull();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// OGM check digit validation
+// ---------------------------------------------------------------------------
+
+describe("validateOgmCheckDigit", () => {
+	it("validates 090933755493 (0909337554 mod 97 = 93)", () => {
+		expect(validateOgmCheckDigit("090933755493")).toBe(true);
+	});
+
+	it("validates 000000000097 (0 mod 97 = 0 → check=97)", () => {
+		expect(validateOgmCheckDigit("000000000097")).toBe(true);
+	});
+
+	it("validates 123456789002 (1234567890 mod 97 = 2)", () => {
+		expect(validateOgmCheckDigit("123456789002")).toBe(true);
+	});
+
+	it("rejects 123456789099 (wrong check digit)", () => {
+		expect(validateOgmCheckDigit("123456789099")).toBe(false);
+	});
+
+	it("validates 000000009797 (97 mod 97 = 0 → check=97)", () => {
+		expect(validateOgmCheckDigit("000000009797")).toBe(true);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// OGM formatting
+// ---------------------------------------------------------------------------
+
+describe("formatOgm", () => {
+	it('formats "1234567890" → "+++123/4567/89002+++"', () => {
+		expect(formatOgm("1234567890")).toBe("+++123/4567/89002+++");
+	});
+
+	it('formats "0000000000" → "+++000/0000/00097+++"', () => {
+		expect(formatOgm("0000000000")).toBe("+++000/0000/00097+++");
 	});
 });
 
@@ -814,11 +864,11 @@ describe("Full pipeline integration — Revolut Personal", () => {
 		}
 	});
 
-	it("Record 9 debit + credit totals match individual transaction amounts", () => {
+	it("Record 9 debit + credit totals match individual transaction amounts (including fees)", () => {
 		const txns = parseTransactions(csvContent, "revolut-personal");
 		const stmt = mapToCoda(txns, config);
 
-		// Manually sum debits and credits
+		// Manually sum debits and credits — fees are always additional debits
 		let expectedDebit = 0n;
 		let expectedCredit = 0n;
 		for (const tx of txns) {
@@ -827,6 +877,9 @@ describe("Full pipeline integration — Revolut Personal", () => {
 				expectedDebit += mc;
 			} else {
 				expectedCredit += mc;
+			}
+			if (tx.fee !== undefined && tx.fee !== 0) {
+				expectedDebit += toMilliCents(tx.fee);
 			}
 		}
 
@@ -992,5 +1045,264 @@ describe("Edge cases", () => {
 			accountDescription: "Business checking account",
 		});
 		expect(stmt.oldBalance.accountDescription).toBe("Business checking account");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// 14. Fee handling
+// ---------------------------------------------------------------------------
+
+describe("Fee handling — fee generates separate debit Record 21", () => {
+	it("transaction with fee (-1.50) emits 2 Record 21s (main + fee)", () => {
+		const txns: BankTransaction[] = [
+			makeTx({ amount: -200, description: "Exchanged to USD", rawType: "EXCHANGE", fee: -1.5 }),
+		];
+		const stmt = mapToCoda(txns, BASE_CONFIG);
+		const rec21s = stmt.records.filter((r) => r.recordType === "21");
+		expect(rec21s).toHaveLength(2);
+	});
+
+	it("transaction without fee emits exactly 1 Record 21", () => {
+		const txns: BankTransaction[] = [
+			makeTx({ amount: -42.5, description: "Delhaize", rawType: "CARD_PAYMENT" }),
+		];
+		const stmt = mapToCoda(txns, BASE_CONFIG);
+		const rec21s = stmt.records.filter((r) => r.recordType === "21");
+		expect(rec21s).toHaveLength(1);
+	});
+
+	it("transaction with fee of exactly 0 emits no extra record", () => {
+		const txns: BankTransaction[] = [makeTx({ amount: -42.5, fee: 0 })];
+		const stmt = mapToCoda(txns, BASE_CONFIG);
+		const rec21s = stmt.records.filter((r) => r.recordType === "21");
+		expect(rec21s).toHaveLength(1);
+	});
+
+	it("transaction with fee of undefined emits no extra record", () => {
+		const txns: BankTransaction[] = [makeTx({ amount: -42.5, fee: undefined })];
+		const stmt = mapToCoda(txns, BASE_CONFIG);
+		const rec21s = stmt.records.filter((r) => r.recordType === "21");
+		expect(rec21s).toHaveLength(1);
+	});
+
+	it("fee Record 21 has transaction code family '35', operation '01'", () => {
+		const txns: BankTransaction[] = [
+			makeTx({ amount: -200, description: "Exchanged to USD", rawType: "EXCHANGE", fee: -1.5 }),
+		];
+		const stmt = mapToCoda(txns, BASE_CONFIG);
+		const rec21s = stmt.records.filter((r) => r.recordType === "21");
+		// Second record is the fee
+		const feeRec = rec21s[1];
+		expect(feeRec?.recordType).toBe("21");
+		if (feeRec?.recordType === "21") {
+			expect(feeRec.transactionCode.family).toBe("35");
+			expect(feeRec.transactionCode.operation).toBe("01");
+			expect(feeRec.transactionCode.type).toBe("1");
+			expect(feeRec.transactionCode.category).toBe("000");
+		}
+	});
+
+	it("fee Record 21 communication starts with 'Fee: '", () => {
+		const txns: BankTransaction[] = [
+			makeTx({ amount: -200, description: "Exchanged to USD", fee: -1.5 }),
+		];
+		const stmt = mapToCoda(txns, BASE_CONFIG);
+		const rec21s = stmt.records.filter((r) => r.recordType === "21");
+		const feeRec = rec21s[1];
+		expect(feeRec?.recordType).toBe("21");
+		if (feeRec?.recordType === "21") {
+			expect(feeRec.communication.startsWith("Fee: ")).toBe(true);
+			expect(feeRec.communication).toContain("Exchanged to USD");
+		}
+	});
+
+	it("fee Record 21 communication is truncated to 53 chars for very long descriptions", () => {
+		const longDesc = "A".repeat(60);
+		const txns: BankTransaction[] = [makeTx({ amount: -200, description: longDesc, fee: -1.5 })];
+		const stmt = mapToCoda(txns, BASE_CONFIG);
+		const rec21s = stmt.records.filter((r) => r.recordType === "21");
+		const feeRec = rec21s[1];
+		if (feeRec?.recordType === "21") {
+			expect(feeRec.communication.length).toBeLessThanOrEqual(53);
+		}
+	});
+
+	it("fee Record 21 always has amountSign '1' (debit), even if tx.fee is negative", () => {
+		const txns: BankTransaction[] = [makeTx({ amount: -200, fee: -1.5 })];
+		const stmt = mapToCoda(txns, BASE_CONFIG);
+		const rec21s = stmt.records.filter((r) => r.recordType === "21");
+		const feeRec = rec21s[1];
+		if (feeRec?.recordType === "21") {
+			expect(feeRec.amountSign).toBe("1");
+		}
+	});
+
+	it("fee amount in Record 21 is the absolute value in milli-cents", () => {
+		const txns: BankTransaction[] = [makeTx({ amount: -200, fee: -1.5 })];
+		const stmt = mapToCoda(txns, BASE_CONFIG);
+		const rec21s = stmt.records.filter((r) => r.recordType === "21");
+		const feeRec = rec21s[1];
+		if (feeRec?.recordType === "21") {
+			// -1.5 EUR → 1500 milli-cents (absolute value)
+			expect(feeRec.amount).toBe(1500n);
+		}
+	});
+
+	it("fee sequence number follows the main transaction sequence number", () => {
+		const txns: BankTransaction[] = [makeTx({ amount: -200, fee: -1.5 })];
+		const stmt = mapToCoda(txns, BASE_CONFIG);
+		const rec21s = stmt.records.filter((r) => r.recordType === "21");
+		const mainRec = rec21s[0];
+		const feeRec = rec21s[1];
+		if (mainRec?.recordType === "21" && feeRec?.recordType === "21") {
+			expect(feeRec.sequenceNumber).toBe(mainRec.sequenceNumber + 1);
+		}
+	});
+
+	it("Record 9 totalDebit includes fee amounts", () => {
+		// Single debit of -200, fee of -1.50
+		// Expected debit total: 200000n + 1500n = 201500n
+		const txns: BankTransaction[] = [makeTx({ amount: -200, fee: -1.5 })];
+		const stmt = mapToCoda(txns, BASE_CONFIG);
+		expect(stmt.trailer.totalDebit).toBe(200000n + 1500n);
+		expect(stmt.trailer.totalCredit).toBe(0n);
+	});
+
+	it("new balance includes fee deductions", () => {
+		// opening=1000, main debit=-200, fee=-1.50 → new=1000-200-1.50=798.50
+		const txns: BankTransaction[] = [makeTx({ amount: -200, fee: -1.5 })];
+		const stmt = mapToCoda(txns, { ...BASE_CONFIG, openingBalance: 1000.0 });
+		expect(stmt.newBalance.newBalanceSign).toBe("0");
+		// 1000.00 - 200.00 - 1.50 = 798.50 → 798500n milli-cents
+		expect(stmt.newBalance.newBalanceAmount).toBe(798500n);
+	});
+
+	it("multiple transactions, some with fees: sequence numbers are contiguous and unique", () => {
+		const txns: BankTransaction[] = [
+			makeTx({ amount: -42.5, description: "Card payment" }), // no fee → seq 1
+			makeTx({ amount: -200, description: "Exchange", fee: -1.5 }), // fee → seq 2 (main) + seq 3 (fee)
+			makeTx({ amount: 500, description: "Top-up" }), // no fee → seq 4
+		];
+		const stmt = mapToCoda(txns, BASE_CONFIG);
+		const rec21s = stmt.records.filter((r) => r.recordType === "21");
+		expect(rec21s).toHaveLength(4); // 3 mains + 1 fee
+
+		const seqNums = rec21s.map((r) => (r.recordType === "21" ? r.sequenceNumber : -1));
+		// All sequence numbers must be unique and contiguous starting at 1
+		expect(seqNums).toEqual([1, 2, 3, 4]);
+	});
+
+	it("multiple transactions, some with fees: totalDebit and totalCredit are correct", () => {
+		const txns: BankTransaction[] = [
+			makeTx({ amount: -42.5 }), // debit 42.5
+			makeTx({ amount: -200, fee: -1.5 }), // debit 200 + fee 1.5
+			makeTx({ amount: 500 }), // credit 500
+		];
+		const stmt = mapToCoda(txns, BASE_CONFIG);
+
+		// totalDebit = 42500n + 200000n + 1500n = 244000n
+		expect(stmt.trailer.totalDebit).toBe(42500n + 200000n + 1500n);
+		// totalCredit = 500000n
+		expect(stmt.trailer.totalCredit).toBe(500000n);
+	});
+
+	it("fee Record 21 hasContinuation is false (no rec22/23 for fee records)", () => {
+		const txns: BankTransaction[] = [makeTx({ amount: -200, fee: -1.5 })];
+		const stmt = mapToCoda(txns, BASE_CONFIG);
+		const rec21s = stmt.records.filter((r) => r.recordType === "21");
+		const feeRec = rec21s[1];
+		if (feeRec?.recordType === "21") {
+			expect(feeRec.hasContinuation).toBe(false);
+		}
+	});
+
+	it("record count in trailer includes fee Record 21s", () => {
+		// 1 transaction with fee → rec1 + rec21(main) + rec21(fee) + rec8 = 4
+		const txns: BankTransaction[] = [makeTx({ amount: -200, fee: -1.5 })];
+		const stmt = mapToCoda(txns, BASE_CONFIG);
+		expect(stmt.trailer.recordCount).toBe(4);
+	});
+
+	it("fee Record 21 output line is exactly 128 chars when serialized", () => {
+		const txns: BankTransaction[] = [
+			makeTx({ amount: -200, description: "Exchanged to USD", fee: -1.5 }),
+		];
+		const stmt = mapToCoda(txns, BASE_CONFIG);
+		const output = serializeCoda(stmt);
+		const lines = output.trimEnd().split("\n");
+		for (const line of lines) {
+			expect(line.length).toBe(128);
+		}
+	});
+});
+
+describe("Fee handling — Full pipeline with Revolut exchange fixture", () => {
+	const FIXTURES_DIR = join(import.meta.dir, "../../src/parsers/__tests__/fixtures");
+	const csvContent = readFileSync(join(FIXTURES_DIR, "revolut-personal.csv"), "utf-8");
+
+	const config: CodaConfig = {
+		bankId: "535",
+		accountIban: "BE68539007547034",
+		accountCurrency: "EUR",
+		accountHolderName: "Test User",
+		openingBalance: 2000.0,
+		openingBalanceDate: new Date("2026-01-14"),
+		bic: "REVOLT21   ",
+		statementSequence: 1,
+	};
+
+	it("EXCHANGE transaction with fee=-1.50 produces 2 Record 21s in output", () => {
+		const txns = parseTransactions(csvContent, "revolut-personal");
+		// Find the EXCHANGE transaction
+		const exchangeTx = txns.find((tx) => tx.rawType === "EXCHANGE");
+		expect(exchangeTx).toBeDefined();
+		expect(exchangeTx?.fee).toBe(-1.5);
+
+		const stmt = mapToCoda(txns, config);
+		const rec21s = stmt.records.filter((r) => r.recordType === "21");
+
+		// 8 completed transactions in fixture (PENDING row is skipped), 1 has a fee → 9 rec21s
+		expect(rec21s).toHaveLength(9);
+	});
+
+	it("new balance from full fixture accounts for fee of -1.50", () => {
+		const txns = parseTransactions(csvContent, "revolut-personal");
+		const stmt = mapToCoda(txns, config);
+
+		// Manually compute: opening=2000.00
+		// Transactions (COMPLETED only):
+		//   CARD_PAYMENT   -42.50
+		//   TRANSFER       -500.00
+		//   TOPUP          +2000.00
+		//   CARD_PAYMENT   -65.30
+		//   TRANSFER       +1500.00
+		//   EXCHANGE       -200.00, fee=-1.50
+		//   CARD_PAYMENT   -89.99
+		//   TRANSFER       -850.00
+		//   CARD_PAYMENT   -30.00  (state=PENDING → skipped)
+		// Sum of credits  = 2000 + 1500 = 3500
+		// Sum of debits   = 42.50 + 500 + 65.30 + 200 + 1.50 + 89.99 + 850 = 1749.29
+		// Note: PENDING is filtered out by the parser
+		// new balance = 2000 + 3500 - 1749.29 = 3750.71
+
+		// Verify totalDebit includes the fee
+		// credits: TOPUP 2000 + TRANSFER_in 1500 = 3500 → 3500000n
+		// debits: 42.5+500+65.30+200+89.99+850 = 1747.79 main + 1.50 fee = 1749.29 → 1749290n
+		expect(stmt.trailer.totalDebit).toBe(1749290n);
+		expect(stmt.trailer.totalCredit).toBe(3500000n);
+
+		// new balance = 2000000n + 3500000n - 1749290n = 3750710n
+		expect(stmt.newBalance.newBalanceSign).toBe("0");
+		expect(stmt.newBalance.newBalanceAmount).toBe(3750710n);
+	});
+
+	it("all lines in fee-inclusive output are exactly 128 chars", () => {
+		const txns = parseTransactions(csvContent, "revolut-personal");
+		const stmt = mapToCoda(txns, config);
+		const output = serializeCoda(stmt);
+		const lines = output.trimEnd().split("\n");
+		for (const line of lines) {
+			expect(line.length).toBe(128);
+		}
 	});
 });

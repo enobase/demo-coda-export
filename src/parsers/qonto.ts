@@ -11,10 +11,18 @@
  * Auto-detection key: presence of "Settlement date (UTC)" in the header.
  */
 
-import { parseCsv } from "./csv.ts";
+import { parseCsv, validateColumns } from "./csv.ts";
 import type { BankTransaction, InputFormat, InputParser } from "./types.ts";
 
 const ACCEPTED_STATUSES = new Set(["settled", "executed"]);
+
+/** Columns that must be present for the parser to operate correctly */
+const REQUIRED_COLUMNS = [
+	"Status",
+	"Settlement date (UTC)",
+	"Total amount (incl. VAT)",
+	"Currency",
+];
 
 /**
  * Parse a date string from Qonto CSVs.
@@ -61,6 +69,9 @@ export const qontoParser: InputParser = {
 
 	parse(content: string): BankTransaction[] {
 		const rows = parseCsv(content);
+		if (rows.length > 0) {
+			validateColumns(Object.keys(rows[0] as Record<string, string>), REQUIRED_COLUMNS, "Qonto");
+		}
 		const transactions: BankTransaction[] = [];
 
 		for (const row of rows) {

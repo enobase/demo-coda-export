@@ -11,7 +11,7 @@
  * Auto-detection key: presence of "Beneficiary IBAN" in the header.
  */
 
-import { parseCsv } from "./csv.ts";
+import { parseCsv, validateColumns } from "./csv.ts";
 import type { BankTransaction, InputFormat, InputParser } from "./types.ts";
 
 /**
@@ -52,6 +52,15 @@ function normaliseBic(raw: string): string | undefined {
 	return cleaned.length > 0 ? cleaned : undefined;
 }
 
+/** Columns that must be present for the parser to operate correctly */
+const REQUIRED_COLUMNS = [
+	"Date completed (UTC)",
+	"Amount",
+	"Payment currency",
+	"Type",
+	"Description",
+];
+
 export const revolutBusinessParser: InputParser = {
 	name: "Revolut Business",
 	format: "revolut-business" as InputFormat,
@@ -62,6 +71,13 @@ export const revolutBusinessParser: InputParser = {
 
 	parse(content: string): BankTransaction[] {
 		const rows = parseCsv(content);
+		if (rows.length > 0) {
+			validateColumns(
+				Object.keys(rows[0] as Record<string, string>),
+				REQUIRED_COLUMNS,
+				"Revolut Business",
+			);
+		}
 		const transactions: BankTransaction[] = [];
 
 		for (const row of rows) {

@@ -12,16 +12,20 @@
 // Core pipeline
 // ---------------------------------------------------------------------------
 
+export { encodeLatin1, toLatin1Safe } from "./encoding.ts";
 export type { CodaConfig } from "./mapper.ts";
 export {
 	buildTransactionCode,
 	detectOgm,
+	formatOgm,
 	mapToCoda,
 	splitCommunication,
 	toMilliCents,
 	toSignCode,
 	validateConfig,
+	validateOgmCheckDigit,
 } from "./mapper.ts";
+export type { SerializeOptions } from "./serializer.ts";
 export { serializeCoda } from "./serializer.ts";
 export type { ValidationError, ValidationResult } from "./validator.ts";
 export { validate } from "./validator.ts";

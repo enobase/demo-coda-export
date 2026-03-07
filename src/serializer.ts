@@ -14,6 +14,7 @@
  *   - Dates: DDMMYY (6 digits).
  */
 
+import { toLatin1Safe } from "./encoding.ts";
 import type {
 	CodaStatement,
 	Record0Header,
@@ -29,6 +30,21 @@ import type {
 	Record33InformationEnd,
 	TransactionCode,
 } from "./types.ts";
+
+// ---------------------------------------------------------------------------
+// Serialization options
+// ---------------------------------------------------------------------------
+
+export interface SerializeOptions {
+	/**
+	 * Output encoding to target.
+	 *   'latin-1' (default) — sanitizes each line through toLatin1Safe so that
+	 *     every character is in the Latin-1 range before the 128-char check.
+	 *     This matches real Belgian CODA files which use ISO-8859-1.
+	 *   'utf-8' — no sanitization; output is returned as plain UTF-16 JS string.
+	 */
+	encoding?: "utf-8" | "latin-1";
+}
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -93,9 +109,9 @@ export function formatDate(date: Date | string): string {
 		}
 		return date;
 	}
-	const dd = String(date.getDate()).padStart(2, "0");
-	const mm = String(date.getMonth() + 1).padStart(2, "0");
-	const yy = String(date.getFullYear()).slice(-2);
+	const dd = String(date.getUTCDate()).padStart(2, "0");
+	const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
+	const yy = String(date.getUTCFullYear()).slice(-2);
 	return `${dd}${mm}${yy}`;
 }
 
@@ -562,7 +578,7 @@ export function serializeRecord9(rec: Record9Trailer): string {
  *   Record 8 (new balance)
  *   Record 9 (trailer)
  */
-export function serializeCoda(statement: CodaStatement): string {
+export function serializeCoda(statement: CodaStatement, options?: SerializeOptions): string {
 	const lines: string[] = [];
 
 	lines.push(serializeRecord0(statement.header));
@@ -597,5 +613,11 @@ export function serializeCoda(statement: CodaStatement): string {
 	lines.push(serializeRecord8(statement.newBalance));
 	lines.push(serializeRecord9(statement.trailer));
 
-	return `${lines.join("\n")}\n`;
+	// Apply Latin-1 sanitization per line (default behaviour).
+	// toLatin1Safe is a 1:1 character replacement so it cannot change line
+	// lengths — the 128-char invariant is preserved.
+	const encoding = options?.encoding ?? "latin-1";
+	const outputLines = encoding === "latin-1" ? lines.map(toLatin1Safe) : lines;
+
+	return `${outputLines.join("\n")}\n`;
 }
