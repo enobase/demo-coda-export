@@ -1,11 +1,22 @@
 # demo-coda-export
 
-Convert neobank CSV exports to Belgian CODA bank statement format.
+**Free yourself from overpriced Belgian bank CODA exports.**
 
-This tool reads transaction exports from Revolut Personal, Revolut Business, Qonto, N26, and Wise
-and produces CODA 2.6 files — the fixed-width 128-character-per-line format defined by Febelfin and
-accepted by Belgian accounting software (Exact, Yuki, BOB50, etc.). It is a **writer only**: it
-does not parse existing CODA files.
+If you've started a company in Belgium, you know the drill: your accountant needs CODA files — the Belgian standard for coded bank statements. Traditional banks charge up to ~5 EUR/month per account just for this file format conversion. Worse, this dependency locks you into banks with outdated digital infrastructure, when modern neobanks like Revolut, N26, Qonto, and Wise offer far better banking experiences but simply don't generate CODA files.
+
+This tool breaks that loop. Export your transactions as CSV from any supported neobank, run this converter, and hand your accountant a valid CODA file. No legacy bank required.
+
+## Why did we build this
+
+At [Enobase](https://github.com/enobase), we want to shake up how things are done and be on the side of progress — where things ship fast, work reliably, and use the latest tools. We believe people should be free to start their business with a wider choice of banks without being held back by a file format from the 1990s.
+
+This is a **clean-room implementation** based on the [Febelfin CODA 2.6 specification](https://febelfin.be/media/pages/publicaties/2021/gecodeerde-berichtgeving-coda/fd115cfb8b-1694763197/standard-coda-2.6-nl-1.pdf) (the latest published version) and the [EPBF format description](https://www.epbf.be/sites/default/themes/custom/zen_epbf/images/pdf_doc/format_description_CODA.pdf). We independently validated the output using [pycoda](https://github.com/acsone/pycoda) (a Python CODA parser), tested against real CODA exports from Belfius to confirm structural compatibility, and verified the results with an accountant.
+
+**It comes with no guarantees.** This is MIT-licensed open source software. See [SCOPE.md](SCOPE.md) for exactly what is tested and what is best-effort. Contributions welcome.
+
+## What it does
+
+Reads transaction exports (CSV) from 5 neobanks and produces CODA 2.6 files — the fixed-width 128-character-per-line format defined by [Febelfin](https://febelfin.be/en/themes/digitalization-innovation/regulations/a-coda-file-what-is-it-and-what-can-you-use-it-for) and accepted by Belgian accounting software (Exact, Yuki, BOB50, etc.). It is a **writer only**: it does not parse existing CODA files.
 
 ## Supported input formats
 
@@ -236,4 +247,6 @@ details.
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
+
+Built with Bun + TypeScript. Zero runtime dependencies.
