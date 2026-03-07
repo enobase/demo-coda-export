@@ -62,7 +62,7 @@ function makeTx(overrides: Partial<BankTransaction> = {}): BankTransaction {
 function fullPipeline(
 	csvContent: string,
 	config: CodaConfig,
-	format?: "revolut-personal" | "revolut-business" | "qonto",
+	format?: "revolut-personal" | "revolut-business" | "qonto" | "n26" | "wise",
 ) {
 	const transactions = parseTransactions(csvContent, format);
 	const statement = mapToCoda(transactions, config);
@@ -468,5 +468,180 @@ describe("Format auto-detection", () => {
 			expect(txns.length).toBeGreaterThan(0);
 			expect(txns[0].source).toBe("qonto");
 		}).not.toThrow();
+	});
+
+	it("auto-detects n26 without explicit format", () => {
+		const csv = readCsv("n26.csv");
+		expect(() => {
+			const txns = parseTransactions(csv);
+			expect(txns.length).toBeGreaterThan(0);
+			expect(txns[0].source).toBe("n26");
+		}).not.toThrow();
+	});
+
+	it("auto-detects wise without explicit format", () => {
+		const csv = readCsv("wise.csv");
+		expect(() => {
+			const txns = parseTransactions(csv);
+			expect(txns.length).toBeGreaterThan(0);
+			expect(txns[0].source).toBe("wise");
+		}).not.toThrow();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// 6. N26 → CODA full pipeline
+// ---------------------------------------------------------------------------
+
+describe("N26 → CODA full pipeline", () => {
+	const csv = readCsv("n26.csv");
+	const config = makeConfig({
+		bankId: "767",
+		accountIban: "BE68539007547034",
+		accountHolderName: "N26 Account Holder",
+		openingBalance: 5000.0,
+		openingBalanceDate: new Date("2026-01-31"),
+	});
+
+	it("parses and maps without throwing", () => {
+		expect(() => fullPipeline(csv, config, "n26")).not.toThrow();
+	});
+
+	it("produces a valid CODA file", () => {
+		const { validationResult } = fullPipeline(csv, config, "n26");
+		expect(validationResult.valid).toBe(true);
+		expect(validationResult.errors.filter((e) => e.severity === "error")).toHaveLength(0);
+	});
+
+	it("every line is exactly 128 characters", () => {
+		const { codaContent } = fullPipeline(csv, config, "n26");
+		for (const line of codaContent.trimEnd().split("\n")) {
+			expect(line.length).toBe(128);
+		}
+	});
+
+	it("contains Record 23 lines for transactions with IBAN", () => {
+		const { codaContent } = fullPipeline(csv, config, "n26");
+		const lines = codaContent.trimEnd().split("\n");
+		const rec23Lines = lines.filter((l) => l.startsWith("23"));
+		expect(rec23Lines.length).toBeGreaterThan(0);
+	});
+
+	it("OGM reference produces structured communication type in Record 21", () => {
+		const { codaContent } = fullPipeline(csv, config, "n26");
+		const lines = codaContent.trimEnd().split("\n");
+		// The third transaction has an OGM reference: +++090/9337/55493+++
+		const ogmLines = lines.filter((l) => l.startsWith("21") && l[61] === "1");
+		expect(ogmLines.length).toBeGreaterThan(0);
+	});
+
+	it("trailer record count matches actual records", () => {
+		const { codaContent } = fullPipeline(csv, config, "n26");
+		const lines = codaContent.trimEnd().split("\n");
+		const trailer = lines[lines.length - 1];
+		const claimedCount = Number(trailer.slice(16, 22));
+		expect(claimedCount).toBe(lines.length - 2);
+	});
+
+	it("debit and credit totals match trailer", () => {
+		const { codaContent } = fullPipeline(csv, config, "n26");
+		const lines = codaContent.trimEnd().split("\n");
+		const trailer = lines[lines.length - 1];
+		const claimedDebit = BigInt(trailer.slice(22, 37));
+		const claimedCredit = BigInt(trailer.slice(37, 52));
+
+		let totalDebit = 0n;
+		let totalCredit = 0n;
+		for (const line of lines) {
+			if (!line.startsWith("21")) continue;
+			const sign = line[31];
+			const amount = BigInt(line.slice(32, 47));
+			if (sign === "1") totalDebit += amount;
+			else totalCredit += amount;
+		}
+
+		expect(claimedDebit).toBe(totalDebit);
+		expect(claimedCredit).toBe(totalCredit);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// 7. Wise → CODA full pipeline
+// ---------------------------------------------------------------------------
+
+describe("Wise → CODA full pipeline", () => {
+	const csv = readCsv("wise.csv");
+	const config = makeConfig({
+		bankId: "539",
+		accountIban: "BE68539007547034",
+		accountHolderName: "Wise Account Holder",
+		openingBalance: 5000.0,
+		openingBalanceDate: new Date("2026-01-14"),
+	});
+
+	it("parses and maps without throwing", () => {
+		expect(() => fullPipeline(csv, config, "wise")).not.toThrow();
+	});
+
+	it("produces a valid CODA file", () => {
+		const { validationResult } = fullPipeline(csv, config, "wise");
+		expect(validationResult.valid).toBe(true);
+		expect(validationResult.errors.filter((e) => e.severity === "error")).toHaveLength(0);
+	});
+
+	it("every line is exactly 128 characters", () => {
+		const { codaContent } = fullPipeline(csv, config, "wise");
+		for (const line of codaContent.trimEnd().split("\n")) {
+			expect(line.length).toBe(128);
+		}
+	});
+
+	it("parses 6 transactions from the fixture", () => {
+		const { transactions } = fullPipeline(csv, config, "wise");
+		expect(transactions).toHaveLength(6);
+	});
+
+	it("contains Record 23 lines for transactions with counterparty IBAN", () => {
+		const { codaContent } = fullPipeline(csv, config, "wise");
+		const lines = codaContent.trimEnd().split("\n");
+		const rec23Lines = lines.filter((l) => l.startsWith("23"));
+		expect(rec23Lines.length).toBeGreaterThan(0);
+	});
+
+	it("fee transactions produce additional debit Record 21 entries", () => {
+		const { codaContent } = fullPipeline(csv, config, "wise");
+		const lines = codaContent.trimEnd().split("\n");
+		const rec21Lines = lines.filter((l) => l.startsWith("21"));
+		// 6 transactions + 2 non-zero fees (TW-001: 2.50, TW-004: 3.50) = 8 Record 21 entries
+		expect(rec21Lines.length).toBe(8);
+	});
+
+	it("trailer record count matches actual records", () => {
+		const { codaContent } = fullPipeline(csv, config, "wise");
+		const lines = codaContent.trimEnd().split("\n");
+		const trailer = lines[lines.length - 1];
+		const claimedCount = Number(trailer.slice(16, 22));
+		expect(claimedCount).toBe(lines.length - 2);
+	});
+
+	it("debit and credit totals match trailer", () => {
+		const { codaContent } = fullPipeline(csv, config, "wise");
+		const lines = codaContent.trimEnd().split("\n");
+		const trailer = lines[lines.length - 1];
+		const claimedDebit = BigInt(trailer.slice(22, 37));
+		const claimedCredit = BigInt(trailer.slice(37, 52));
+
+		let totalDebit = 0n;
+		let totalCredit = 0n;
+		for (const line of lines) {
+			if (!line.startsWith("21")) continue;
+			const sign = line[31];
+			const amount = BigInt(line.slice(32, 47));
+			if (sign === "1") totalDebit += amount;
+			else totalCredit += amount;
+		}
+
+		expect(claimedDebit).toBe(totalDebit);
+		expect(claimedCredit).toBe(totalCredit);
 	});
 });

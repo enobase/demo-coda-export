@@ -1,0 +1,7 @@
+TransferWise ID,Date,Amount,Currency,Description,Payment Reference,Running Balance,Exchange From,Exchange To,Exchange Rate,Payer Name,Payee Name,Payee Account Number,Merchant,Card Last Four Digits,Card Holder Full Name,Attachment,Note,Total Fees
+TW-001,15-01-2026,-500.00,EUR,Transfer to Jan,Monthly rent,4500.00,,,,Jan Peeters,Jan Peeters,BE43068999999501,,,,,,-2.50
+TW-002,18-01-2026,2000.00,EUR,Payment received,,6500.00,,,,Client Alpha,,,,,,,,0.00
+TW-003,20-01-2026,-150.00,EUR,Card payment,,6350.00,,,,,,,Amazon.de,4321,John Doe,,,-0.00
+TW-004,22-01-2026,-1000.00,EUR,Currency exchange,,5350.00,EUR,USD,1.08,,,,,,,,,  -3.50
+TW-005,25-01-2026,500.00,EUR,Refund,,5850.00,,,,Merchant X,,,,,,,,0.00
+TW-006,28-01-2026,-75.00,EUR,Subscription,,5775.00,,,,,Service Y,DE89370400440532013000,,,,,,0.00

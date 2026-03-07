@@ -9,10 +9,12 @@
  *   const txns2  = parseTransactions(csvContent, "qonto"); // explicit format
  */
 
+import { n26Parser } from "./n26.ts";
 import { qontoParser } from "./qonto.ts";
 import { revolutBusinessParser } from "./revolut-business.ts";
 import { revolutPersonalParser } from "./revolut-personal.ts";
 import type { BankTransaction, InputFormat, InputParser } from "./types.ts";
+import { wiseParser } from "./wise.ts";
 
 export type { BankTransaction, InputFormat, InputParser };
 
@@ -20,8 +22,16 @@ export type { BankTransaction, InputFormat, InputParser };
  * All registered parsers, in priority order.
  * Revolut Business is checked before Revolut Personal because its header is a
  * superset (it also contains "Completed Date"-like columns).
+ * Wise is checked first among new parsers because "TransferWise ID" is very
+ * distinctive. N26 is checked before the Revolut parsers to avoid false matches.
  */
-const PARSERS: InputParser[] = [revolutBusinessParser, revolutPersonalParser, qontoParser];
+const PARSERS: InputParser[] = [
+	wiseParser,
+	n26Parser,
+	revolutBusinessParser,
+	revolutPersonalParser,
+	qontoParser,
+];
 
 /**
  * Read the first non-empty line of the CSV content and try each parser's
@@ -61,7 +71,7 @@ export function parseTransactions(content: string, format?: InputFormat): BankTr
 	if (!resolvedFormat) {
 		throw new Error(
 			"Unable to detect CSV format. " +
-				"Supported formats: revolut-personal, revolut-business, qonto. " +
+				"Supported formats: revolut-personal, revolut-business, qonto, n26, wise. " +
 				"Pass an explicit format parameter if auto-detection is insufficient.",
 		);
 	}
@@ -78,4 +88,4 @@ export function parseTransactions(content: string, format?: InputFormat): BankTr
 }
 
 /** Expose individual parsers for callers that want direct access */
-export { qontoParser, revolutBusinessParser, revolutPersonalParser };
+export { n26Parser, qontoParser, revolutBusinessParser, revolutPersonalParser, wiseParser };

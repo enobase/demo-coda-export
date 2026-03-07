@@ -205,6 +205,32 @@ function mapQontoType(rawType: string | undefined, sign: SignCode): TxCodeSpec {
 }
 
 /**
+ * Map an N26 rawType + sign to a CODA transaction code.
+ */
+function mapN26Type(rawType: string | undefined, sign: SignCode): TxCodeSpec {
+	switch (rawType) {
+		case "MasterCard Payment":
+			return { family: "43", operation: "01" };
+		case "Direct Debit":
+			return { family: "05", operation: "01" };
+		case "Credit Transfer":
+		case "Outgoing Transfer":
+		case "Income":
+			return sign === "0" ? { family: "01", operation: "01" } : { family: "01", operation: "37" };
+		default:
+			return { family: "01", operation: "01" };
+	}
+}
+
+/**
+ * Map a Wise transaction to a CODA transaction code.
+ * Wise is primarily a transfer service, so all transactions map to family 01.
+ */
+function mapWiseType(_rawType: string | undefined, sign: SignCode): TxCodeSpec {
+	return sign === "0" ? { family: "01", operation: "01" } : { family: "01", operation: "37" };
+}
+
+/**
  * Build a TransactionCode from a BankTransaction.
  * Type is always "1" (individual). Category is always "000".
  */
@@ -219,6 +245,12 @@ export function buildTransactionCode(tx: BankTransaction): TransactionCode {
 			break;
 		case "qonto":
 			spec = mapQontoType(tx.rawType, sign);
+			break;
+		case "n26":
+			spec = mapN26Type(tx.rawType, sign);
+			break;
+		case "wise":
+			spec = mapWiseType(tx.rawType, sign);
 			break;
 		default:
 			spec = { family: "01", operation: "01" };

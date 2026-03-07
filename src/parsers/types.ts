@@ -27,10 +27,10 @@ export interface BankTransaction {
 	fee?: number;
 	/** Original transaction type string from the source */
 	rawType?: string;
-	source: "revolut-personal" | "revolut-business" | "qonto";
+	source: "revolut-personal" | "revolut-business" | "qonto" | "n26" | "wise";
 }
 
-export type InputFormat = "revolut-personal" | "revolut-business" | "qonto";
+export type InputFormat = "revolut-personal" | "revolut-business" | "qonto" | "n26" | "wise";
 
 export interface InputParser {
 	name: string;

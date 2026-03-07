@@ -1,0 +1,7 @@
+Booking Date,Value Date,Partner Name,Partner Iban,Type,Payment Reference,Account Name,Amount (EUR),Original Amount,Original Currency,Exchange Rate
+2026-02-01,2026-02-01,Delhaize,,MasterCard Payment,,Hauptkonto,-42.50,,,
+2026-02-03,2026-02-03,Proximus,BE95001234567890,Direct Debit,Monthly subscription,Hauptkonto,-55.00,,,
+2026-02-05,2026-02-05,ACME BVBA,BE71096123456769,Credit Transfer,+++090/9337/55493+++,Hauptkonto,3500.00,,,
+2026-02-07,2026-02-07,Jan Peeters,BE43068999999501,Outgoing Transfer,Rent February,Hauptkonto,-850.00,,,
+2026-02-10,2026-02-10,Amazon.de,,MasterCard Payment,,Hauptkonto,-89.99,25.00,USD,0.92
+2026-02-12,2026-02-12,Employer BVBA,BE68539007547034,Income,Salary February,Hauptkonto,4200.00,,,

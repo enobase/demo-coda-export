@@ -11,9 +11,11 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { detectDelimiter, parseCsv, parseCsvLine, validateColumns } from "../csv.ts";
 import { detectFormat, parseTransactions } from "../index.ts";
+import { n26Parser } from "../n26.ts";
 import { qontoParser } from "../qonto.ts";
 import { revolutBusinessParser } from "../revolut-business.ts";
 import { revolutPersonalParser } from "../revolut-personal.ts";
+import { wiseParser } from "../wise.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -838,5 +840,425 @@ describe("Qonto — column validation", () => {
 			"status,Settlement date (UTC),Operation date (UTC),Total amount (incl. VAT),Currency,Counterparty name,Payment method,Transaction ID,IBAN,Reference,Category,Note,VAT amount,Initiator\n" +
 			"settled,2026-01-10 00:00:00,2026-01-10 00:00:00,-150.00,EUR,Proximus,direct_debit,qt1,BE95001234567890,+++123/4567/89002+++,Telecom,,,\n";
 		expect(() => qontoParser.parse(csv)).toThrow(/"Status"/);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// N26 parser
+// ---------------------------------------------------------------------------
+
+describe("N26 — fixture parsing", () => {
+	const content = fixture("n26.csv");
+	const txns = n26Parser.parse(content);
+
+	test("returns 6 transactions", () => {
+		expect(txns).toHaveLength(6);
+	});
+
+	test("all transactions have source = n26", () => {
+		for (const tx of txns) {
+			expect(tx.source).toBe("n26");
+		}
+	});
+
+	test("all transactions have currency EUR", () => {
+		for (const tx of txns) {
+			expect(tx.currency).toBe("EUR");
+		}
+	});
+
+	test("first transaction: MasterCard Payment at Delhaize", () => {
+		const tx = getAt(txns, 0);
+		expect(tx.counterpartyName).toBe("Delhaize");
+		expect(tx.amount).toBe(-42.5);
+		expect(tx.currency).toBe("EUR");
+		expect(tx.rawType).toBe("MasterCard Payment");
+		expect(tx.counterpartyIban).toBeUndefined();
+		expect(tx.reference).toBeUndefined();
+	});
+
+	test("first transaction date is 2026-02-01", () => {
+		const tx = getAt(txns, 0);
+		expect(tx.date.getUTCFullYear()).toBe(2026);
+		expect(tx.date.getUTCMonth()).toBe(1); // February (0-indexed)
+		expect(tx.date.getUTCDate()).toBe(1);
+	});
+
+	test("second transaction: Direct Debit from Proximus with IBAN", () => {
+		const tx = getAt(txns, 1);
+		expect(tx.counterpartyName).toBe("Proximus");
+		expect(tx.amount).toBe(-55.0);
+		expect(tx.rawType).toBe("Direct Debit");
+		expect(tx.counterpartyIban).toBe("BE95001234567890");
+		expect(tx.reference).toBe("Monthly subscription");
+	});
+
+	test("third transaction: Credit Transfer with OGM reference", () => {
+		const tx = getAt(txns, 2);
+		expect(tx.counterpartyName).toBe("ACME BVBA");
+		expect(tx.amount).toBe(3500.0);
+		expect(tx.rawType).toBe("Credit Transfer");
+		expect(tx.counterpartyIban).toBe("BE71096123456769");
+		expect(tx.reference).toBe("+++090/9337/55493+++");
+	});
+
+	test("fourth transaction: Outgoing Transfer to Jan Peeters", () => {
+		const tx = getAt(txns, 3);
+		expect(tx.counterpartyName).toBe("Jan Peeters");
+		expect(tx.amount).toBe(-850.0);
+		expect(tx.rawType).toBe("Outgoing Transfer");
+		expect(tx.reference).toBe("Rent February");
+	});
+
+	test("fifth transaction: MasterCard Payment at Amazon.de", () => {
+		const tx = getAt(txns, 4);
+		expect(tx.counterpartyName).toBe("Amazon.de");
+		expect(tx.amount).toBeCloseTo(-89.99);
+		expect(tx.rawType).toBe("MasterCard Payment");
+	});
+
+	test("sixth transaction: Income (salary)", () => {
+		const tx = getAt(txns, 5);
+		expect(tx.counterpartyName).toBe("Employer BVBA");
+		expect(tx.amount).toBe(4200.0);
+		expect(tx.rawType).toBe("Income");
+		expect(tx.counterpartyIban).toBe("BE68539007547034");
+		expect(tx.reference).toBe("Salary February");
+	});
+
+	test("IBAN is normalised (spaces removed, uppercase)", () => {
+		const tx = getAt(txns, 1);
+		expect(tx.counterpartyIban).not.toContain(" ");
+		expect(tx.counterpartyIban).toBe(tx.counterpartyIban?.toUpperCase());
+	});
+
+	test("description falls back to counterpartyName", () => {
+		const tx = getAt(txns, 0);
+		expect(tx.description).toBe("Delhaize");
+	});
+});
+
+describe("N26 — detect()", () => {
+	test("detects N26 header", () => {
+		const header =
+			"Booking Date,Value Date,Partner Name,Partner Iban,Type,Payment Reference,Account Name,Amount (EUR),Original Amount,Original Currency,Exchange Rate";
+		expect(n26Parser.detect(header)).toBe(true);
+	});
+
+	test("does NOT detect Revolut Personal header", () => {
+		const header =
+			"Type,Product,Started Date,Completed Date,Description,Amount,Fee,Currency,State,Balance";
+		expect(n26Parser.detect(header)).toBe(false);
+	});
+
+	test("does NOT detect Qonto header", () => {
+		const header =
+			"Status,Settlement date (UTC),Total amount (incl. VAT),Currency,Counterparty name";
+		expect(n26Parser.detect(header)).toBe(false);
+	});
+
+	test("does NOT detect Wise header", () => {
+		const header =
+			"TransferWise ID,Date,Amount,Currency,Description,Payment Reference,Running Balance";
+		expect(n26Parser.detect(header)).toBe(false);
+	});
+});
+
+describe("N26 — edge cases", () => {
+	test("header-only CSV returns empty array", () => {
+		const csv =
+			"Booking Date,Value Date,Partner Name,Partner Iban,Type,Payment Reference,Account Name,Amount (EUR),Original Amount,Original Currency,Exchange Rate\n";
+		expect(n26Parser.parse(csv)).toHaveLength(0);
+	});
+
+	test("empty reference field is not stored", () => {
+		const csv =
+			"Booking Date,Value Date,Partner Name,Partner Iban,Type,Payment Reference,Account Name,Amount (EUR),Original Amount,Original Currency,Exchange Rate\n" +
+			"2026-02-01,2026-02-01,Shop,,MasterCard Payment,,Hauptkonto,-20.00,,,\n";
+		const txns = n26Parser.parse(csv);
+		expect(txns[0]?.reference).toBeUndefined();
+	});
+
+	test("empty IBAN field is not stored", () => {
+		const csv =
+			"Booking Date,Value Date,Partner Name,Partner Iban,Type,Payment Reference,Account Name,Amount (EUR),Original Amount,Original Currency,Exchange Rate\n" +
+			"2026-02-01,2026-02-01,Shop,,MasterCard Payment,,Hauptkonto,-20.00,,,\n";
+		const txns = n26Parser.parse(csv);
+		expect(txns[0]?.counterpartyIban).toBeUndefined();
+	});
+
+	test("OGM reference in Credit Transfer is preserved verbatim", () => {
+		const csv =
+			"Booking Date,Value Date,Partner Name,Partner Iban,Type,Payment Reference,Account Name,Amount (EUR),Original Amount,Original Currency,Exchange Rate\n" +
+			"2026-02-05,2026-02-05,ACME BVBA,BE71096123456769,Credit Transfer,+++090/9337/55493+++,Hauptkonto,3500.00,,,\n";
+		const txns = n26Parser.parse(csv);
+		expect(txns[0]?.reference).toBe("+++090/9337/55493+++");
+	});
+});
+
+describe("N26 — column validation", () => {
+	const VALID_HEADER =
+		"Booking Date,Value Date,Partner Name,Partner Iban,Type,Payment Reference,Account Name,Amount (EUR),Original Amount,Original Currency,Exchange Rate\n" +
+		"2026-02-01,2026-02-01,Shop,,MasterCard Payment,,Hauptkonto,-20.00,,,\n";
+
+	test("valid headers pass without error", () => {
+		expect(() => n26Parser.parse(VALID_HEADER)).not.toThrow();
+	});
+
+	test("missing required column throws naming the column and parser", () => {
+		const csv =
+			"Value Date,Partner Name,Partner Iban,Type,Payment Reference,Account Name,Amount (EUR),Original Amount,Original Currency,Exchange Rate\n" +
+			"2026-02-01,Shop,,MasterCard Payment,,Hauptkonto,-20.00,,,\n";
+		expect(() => n26Parser.parse(csv)).toThrow(/N26/);
+		expect(() => n26Parser.parse(csv)).toThrow(/"Booking Date"/);
+	});
+
+	test("missing multiple required columns lists all of them", () => {
+		const csv =
+			"Value Date,Partner Iban,Payment Reference,Account Name,Original Amount,Original Currency,Exchange Rate\n" +
+			"2026-02-01,,,Hauptkonto,,,\n";
+		expect(() => n26Parser.parse(csv)).toThrow(/"Booking Date"/);
+		expect(() => n26Parser.parse(csv)).toThrow(/"Amount \(EUR\)"/);
+		expect(() => n26Parser.parse(csv)).toThrow(/"Partner Name"/);
+		expect(() => n26Parser.parse(csv)).toThrow(/"Type"/);
+	});
+
+	test("extra unexpected columns do not cause errors", () => {
+		const csv =
+			"Booking Date,Value Date,Partner Name,Partner Iban,Type,Payment Reference,Account Name,Amount (EUR),Original Amount,Original Currency,Exchange Rate,ExtraCol\n" +
+			"2026-02-01,2026-02-01,Shop,,MasterCard Payment,,Hauptkonto,-20.00,,,,extra\n";
+		expect(() => n26Parser.parse(csv)).not.toThrow();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Wise parser
+// ---------------------------------------------------------------------------
+
+describe("Wise — fixture parsing", () => {
+	const content = fixture("wise.csv");
+	const txns = wiseParser.parse(content);
+
+	test("returns 6 transactions", () => {
+		expect(txns).toHaveLength(6);
+	});
+
+	test("all transactions have source = wise", () => {
+		for (const tx of txns) {
+			expect(tx.source).toBe("wise");
+		}
+	});
+
+	test("first transaction: debit transfer to Jan Peeters with IBAN", () => {
+		const tx = getAt(txns, 0);
+		expect(tx.amount).toBe(-500.0);
+		expect(tx.currency).toBe("EUR");
+		expect(tx.counterpartyName).toBe("Jan Peeters");
+		expect(tx.counterpartyIban).toBe("BE43068999999501");
+		expect(tx.reference).toBe("Monthly rent");
+		expect(tx.balance).toBe(4500.0);
+		expect(tx.fee).toBe(2.5);
+	});
+
+	test("first transaction date is 2026-01-15 (DD-MM-YYYY parsing)", () => {
+		const tx = getAt(txns, 0);
+		expect(tx.date.getUTCFullYear()).toBe(2026);
+		expect(tx.date.getUTCMonth()).toBe(0); // January (0-indexed)
+		expect(tx.date.getUTCDate()).toBe(15);
+	});
+
+	test("second transaction: credit from Client Alpha (Payer Name used)", () => {
+		const tx = getAt(txns, 1);
+		expect(tx.amount).toBe(2000.0);
+		expect(tx.counterpartyName).toBe("Client Alpha");
+		expect(tx.counterpartyIban).toBeUndefined();
+		expect(tx.fee).toBeUndefined(); // 0.00 fee not stored
+	});
+
+	test("third transaction: debit card payment — Merchant used as counterparty", () => {
+		const tx = getAt(txns, 2);
+		expect(tx.amount).toBe(-150.0);
+		expect(tx.counterpartyName).toBe("Amazon.de");
+		// Merchant name is not an IBAN
+		expect(tx.counterpartyIban).toBeUndefined();
+		expect(tx.fee).toBeUndefined(); // -0.00 fee not stored
+	});
+
+	test("fourth transaction: currency exchange debit", () => {
+		const tx = getAt(txns, 3);
+		expect(tx.amount).toBe(-1000.0);
+		expect(tx.fee).toBe(3.5);
+		expect(tx.balance).toBe(5350.0);
+	});
+
+	test("fifth transaction: credit refund from Merchant X", () => {
+		const tx = getAt(txns, 4);
+		expect(tx.amount).toBe(500.0);
+		expect(tx.counterpartyName).toBe("Merchant X");
+	});
+
+	test("sixth transaction: debit subscription with foreign IBAN", () => {
+		const tx = getAt(txns, 5);
+		expect(tx.amount).toBe(-75.0);
+		expect(tx.counterpartyName).toBe("Service Y");
+		expect(tx.counterpartyIban).toBe("DE89370400440532013000");
+	});
+
+	test("IBAN is normalised (spaces removed, uppercase)", () => {
+		const tx = getAt(txns, 0);
+		expect(tx.counterpartyIban).not.toContain(" ");
+		expect(tx.counterpartyIban).toBe(tx.counterpartyIban?.toUpperCase());
+	});
+
+	test("non-IBAN payee account number is not stored as IBAN", () => {
+		const tx = getAt(txns, 2); // Amazon.de has Merchant name in Payee Account Number
+		expect(tx.counterpartyIban).toBeUndefined();
+	});
+
+	test("running balance is stored correctly", () => {
+		const tx = getAt(txns, 1);
+		expect(tx.balance).toBe(6500.0);
+	});
+});
+
+describe("Wise — detect()", () => {
+	test("detects Wise header", () => {
+		const header =
+			"TransferWise ID,Date,Amount,Currency,Description,Payment Reference,Running Balance,Exchange From,Exchange To,Exchange Rate,Payer Name,Payee Name,Payee Account Number,Merchant,Card Last Four Digits,Card Holder Full Name,Attachment,Note,Total Fees";
+		expect(wiseParser.detect(header)).toBe(true);
+	});
+
+	test("does NOT detect Revolut Personal header", () => {
+		const header =
+			"Type,Product,Started Date,Completed Date,Description,Amount,Fee,Currency,State,Balance";
+		expect(wiseParser.detect(header)).toBe(false);
+	});
+
+	test("does NOT detect N26 header", () => {
+		const header =
+			"Booking Date,Value Date,Partner Name,Partner Iban,Type,Payment Reference,Account Name,Amount (EUR)";
+		expect(wiseParser.detect(header)).toBe(false);
+	});
+
+	test("does NOT detect Qonto header", () => {
+		const header =
+			"Status,Settlement date (UTC),Total amount (incl. VAT),Currency,Counterparty name";
+		expect(wiseParser.detect(header)).toBe(false);
+	});
+});
+
+describe("Wise — edge cases", () => {
+	test("header-only CSV returns empty array", () => {
+		const csv =
+			"TransferWise ID,Date,Amount,Currency,Description,Payment Reference,Running Balance,Exchange From,Exchange To,Exchange Rate,Payer Name,Payee Name,Payee Account Number,Merchant,Card Last Four Digits,Card Holder Full Name,Attachment,Note,Total Fees\n";
+		expect(wiseParser.parse(csv)).toHaveLength(0);
+	});
+
+	test("zero fee is not stored", () => {
+		const csv =
+			"TransferWise ID,Date,Amount,Currency,Description,Payment Reference,Running Balance,Exchange From,Exchange To,Exchange Rate,Payer Name,Payee Name,Payee Account Number,Merchant,Card Last Four Digits,Card Holder Full Name,Attachment,Note,Total Fees\n" +
+			"TW-X,15-01-2026,100.00,EUR,Payment,,1000.00,,,,Sender,,,,,,,0.00\n";
+		const txns = wiseParser.parse(csv);
+		expect(txns[0]?.fee).toBeUndefined();
+	});
+
+	test("debit uses Payee Name when Merchant is absent", () => {
+		const csv =
+			"TransferWise ID,Date,Amount,Currency,Description,Payment Reference,Running Balance,Exchange From,Exchange To,Exchange Rate,Payer Name,Payee Name,Payee Account Number,Merchant,Card Last Four Digits,Card Holder Full Name,Attachment,Note,Total Fees\n" +
+			"TW-X,15-01-2026,-100.00,EUR,Transfer,,900.00,,,,,Recipient,,,,,,0.00\n";
+		const txns = wiseParser.parse(csv);
+		expect(txns[0]?.counterpartyName).toBe("Recipient");
+	});
+
+	test("non-IBAN Payee Account Number is ignored", () => {
+		const csv =
+			"TransferWise ID,Date,Amount,Currency,Description,Payment Reference,Running Balance,Exchange From,Exchange To,Exchange Rate,Payer Name,Payee Name,Payee Account Number,Merchant,Card Last Four Digits,Card Holder Full Name,Attachment,Note,Total Fees\n" +
+			"TW-X,15-01-2026,-100.00,EUR,Transfer,,900.00,,,,,Shop,1234-5678,,,,,,0.00\n";
+		const txns = wiseParser.parse(csv);
+		expect(txns[0]?.counterpartyIban).toBeUndefined();
+	});
+});
+
+describe("Wise — column validation", () => {
+	const VALID_HEADER =
+		"TransferWise ID,Date,Amount,Currency,Description,Payment Reference,Running Balance,Exchange From,Exchange To,Exchange Rate,Payer Name,Payee Name,Payee Account Number,Merchant,Card Last Four Digits,Card Holder Full Name,Attachment,Note,Total Fees\n" +
+		"TW-X,15-01-2026,100.00,EUR,Payment,,1000.00,,,,Sender,,,,,,,0.00\n";
+
+	test("valid headers pass without error", () => {
+		expect(() => wiseParser.parse(VALID_HEADER)).not.toThrow();
+	});
+
+	test("missing required column throws naming the column and parser", () => {
+		const csv =
+			"Date,Amount,Currency,Description,Payment Reference,Running Balance,Payer Name,Payee Name,Payee Account Number,Merchant,Total Fees\n" +
+			"15-01-2026,100.00,EUR,Payment,,1000.00,Sender,,,,,0.00\n";
+		expect(() => wiseParser.parse(csv)).toThrow(/Wise/);
+		expect(() => wiseParser.parse(csv)).toThrow(/"TransferWise ID"/);
+	});
+
+	test("missing multiple required columns lists all of them", () => {
+		const csv = "Payment Reference,Running Balance,Exchange From\n" + "ref,1000.00,EUR\n";
+		expect(() => wiseParser.parse(csv)).toThrow(/"TransferWise ID"/);
+		expect(() => wiseParser.parse(csv)).toThrow(/"Date"/);
+		expect(() => wiseParser.parse(csv)).toThrow(/"Amount"/);
+		expect(() => wiseParser.parse(csv)).toThrow(/"Currency"/);
+		expect(() => wiseParser.parse(csv)).toThrow(/"Description"/);
+	});
+
+	test("extra unexpected columns do not cause errors", () => {
+		const csv =
+			"TransferWise ID,Date,Amount,Currency,Description,Payment Reference,Running Balance,Exchange From,Exchange To,Exchange Rate,Payer Name,Payee Name,Payee Account Number,Merchant,Card Last Four Digits,Card Holder Full Name,Attachment,Note,Total Fees,NewColumn\n" +
+			"TW-X,15-01-2026,100.00,EUR,Payment,,1000.00,,,,Sender,,,,,,,,0.00,extra\n";
+		expect(() => wiseParser.parse(csv)).not.toThrow();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Auto-detection for N26 and Wise
+// ---------------------------------------------------------------------------
+
+describe("detectFormat — N26 and Wise", () => {
+	test("detects n26 from fixture", () => {
+		expect(detectFormat(fixture("n26.csv"))).toBe("n26");
+	});
+
+	test("detects wise from fixture", () => {
+		expect(detectFormat(fixture("wise.csv"))).toBe("wise");
+	});
+
+	test("N26 header not confused with other formats", () => {
+		const n26Header =
+			"Booking Date,Value Date,Partner Name,Partner Iban,Type,Payment Reference,Account Name,Amount (EUR),Original Amount,Original Currency,Exchange Rate\n";
+		expect(detectFormat(n26Header)).toBe("n26");
+	});
+
+	test("Wise header not confused with other formats", () => {
+		const wiseHeader =
+			"TransferWise ID,Date,Amount,Currency,Description,Payment Reference,Running Balance,Exchange From,Exchange To,Exchange Rate,Payer Name,Payee Name,Payee Account Number,Merchant,Card Last Four Digits,Card Holder Full Name,Attachment,Note,Total Fees\n";
+		expect(detectFormat(wiseHeader)).toBe("wise");
+	});
+});
+
+describe("parseTransactions — N26 and Wise auto-detect", () => {
+	test("auto-detects and parses n26 fixture", () => {
+		const txns = parseTransactions(fixture("n26.csv"));
+		expect(txns).toHaveLength(6);
+		expect(txns[0]?.source).toBe("n26");
+	});
+
+	test("auto-detects and parses wise fixture", () => {
+		const txns = parseTransactions(fixture("wise.csv"));
+		expect(txns).toHaveLength(6);
+		expect(txns[0]?.source).toBe("wise");
+	});
+
+	test("explicit n26 format bypasses detection", () => {
+		const txns = parseTransactions(fixture("n26.csv"), "n26");
+		expect(txns).toHaveLength(6);
+	});
+
+	test("explicit wise format bypasses detection", () => {
+		const txns = parseTransactions(fixture("wise.csv"), "wise");
+		expect(txns).toHaveLength(6);
 	});
 });
