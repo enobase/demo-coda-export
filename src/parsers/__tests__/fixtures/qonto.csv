@@ -1,0 +1,7 @@
+Status,Settlement date (UTC),Operation date (UTC),Total amount (incl. VAT),Currency,Counterparty name,Payment method,Transaction ID,IBAN,Reference,Category,Note,VAT amount,Initiator
+settled,2026-01-10 08:00:00,2026-01-10 08:00:00,-150.00,EUR,Proximus,direct_debit,qt_001,BE95 0012 3456 7890,+++123/4567/89002+++,Telecom,,31.50,Admin
+settled,2026-01-12 10:00:00,2026-01-12 10:00:00,5000.00,EUR,Client Alpha BVBA,transfer,qt_002,BE71 0961 2345 6769,INV-2026-042,Revenue,,0.00,Admin
+settled,2026-01-15 14:00:00,2026-01-15 14:00:00,-320.00,EUR,Hosting Provider,card,qt_003,,,Services,,67.20,Admin
+settled,2026-01-18 09:00:00,2026-01-18 09:00:00,-45.99,EUR,Office Depot,card,qt_004,,ORD-88721,,Office supplies,,9.66,Admin
+pending,2026-01-20 12:00:00,,-200.00,EUR,Pending Vendor,transfer,qt_005,BE43 0689 9999 9501,,,,,Admin
+settled,2026-01-22 16:00:00,2026-01-22 16:00:00,-890.00,EUR,Accountant BVBA,transfer,qt_006,BE68 5390 0754 7034,+++456/7890/12345+++,Professional services,,186.90,Admin

@@ -1,0 +1,4 @@
+Type;Product;Started Date;Completed Date;Description;Amount;Fee;Currency;State;Balance
+CARD_PAYMENT;Current;2026-01-15 10:30:00;2026-01-15 14:00:00;Delhaize;-42.50;0.00;EUR;COMPLETED;1957.50
+TRANSFER;Current;2026-01-16 09:00:00;2026-01-16 09:05:00;Transfer to Jan Peeters;-500.00;0.00;EUR;COMPLETED;1457.50
+TOPUP;Current;2026-01-17 08:00:00;2026-01-17 08:01:00;Top-Up by *1234;2000.00;0.00;EUR;COMPLETED;3457.50
