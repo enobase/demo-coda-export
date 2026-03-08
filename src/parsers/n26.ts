@@ -9,7 +9,7 @@
  * Detection: header contains "Partner Iban" AND "Account Name" AND "Amount (EUR)"
  */
 
-import { parseCsv, validateColumns } from "./csv.ts";
+import { parseCsv, parseAmount, validateColumns, normaliseIban } from "./csv.ts";
 import type { BankTransaction, InputFormat, InputParser } from "./types.ts";
 
 /** Signature columns that identify this format */
@@ -30,22 +30,6 @@ function parseDate(raw: string): Date {
 		return new Date(`${year}-${month}-${day}T00:00:00Z`);
 	}
 	throw new Error(`Unrecognised N26 date format: "${raw}"`);
-}
-
-function parseAmount(raw: string): number {
-	const trimmed = raw.trim();
-	if (trimmed === "" || trimmed === "-") return 0;
-	const value = Number.parseFloat(trimmed);
-	if (Number.isNaN(value)) {
-		throw new Error(`Invalid amount value: "${raw}"`);
-	}
-	return value;
-}
-
-/** Normalise an IBAN: strip spaces, uppercase */
-function normaliseIban(raw: string): string | undefined {
-	const cleaned = raw.replace(/\s+/g, "").toUpperCase();
-	return cleaned.length > 0 ? cleaned : undefined;
 }
 
 export const n26Parser: InputParser = {
@@ -83,7 +67,7 @@ export const n26Parser: InputParser = {
 
 			const tx: BankTransaction = {
 				date: parseDate(bookingDateRaw),
-				amount: parseAmount(amountRaw),
+				amount: parseAmount(amountRaw, { required: true }),
 				currency: "EUR",
 				description: partnerName ?? rawType ?? "",
 				source: "n26",

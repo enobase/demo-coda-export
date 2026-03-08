@@ -93,7 +93,7 @@ For each neobank:
    The file must validate cleanly before proceeding.
 
 5. Manual spot-checks — open `test.cod` in a text editor and verify:
-   - The line count matches the expected record count (header + old balance + 3 records per transaction + new balance + trailer)
+   - The line count matches the expected record count (header + old balance + N records per transaction + new balance + trailer), where N is 1 for simple transactions (Record 21 only), 3 for transactions with counterparty info (Records 21+22+23), plus 1 additional Record 21 for each transaction carrying a separate fee
    - A few transaction amounts (positions 32-46 of Record 21 lines) match your known values
    - The closing balance (Record 8, positions 5-19) matches the expected closing balance
 

@@ -44,7 +44,7 @@ export function detectDelimiter(headerLine: string): "," | ";" {
  * Parse a single CSV line into an array of raw string values.
  * The line should NOT contain a trailing newline.
  */
-export function parseCsvLine(line: string, delimiter: "," | ";"): string[] {
+export function parseCsvLine(line: string, delimiter: "," | ";", lineNumber?: number): string[] {
 	const fields: string[] = [];
 	let i = 0;
 	const len = line.length;
@@ -60,7 +60,9 @@ export function parseCsvLine(line: string, delimiter: "," | ";"): string[] {
 		if (line[i] === '"') {
 			// Quoted field
 			i++; // skip opening quote
+			const fieldStart = i;
 			let value = "";
+			let closedProperly = false;
 			while (i < len) {
 				const ch = line[i];
 				if (ch === '"') {
@@ -70,6 +72,7 @@ export function parseCsvLine(line: string, delimiter: "," | ";"): string[] {
 						i += 2;
 					} else {
 						// Closing quote
+						closedProperly = true;
 						i++;
 						break;
 					}
@@ -78,10 +81,18 @@ export function parseCsvLine(line: string, delimiter: "," | ";"): string[] {
 					i++;
 				}
 			}
+			if (!closedProperly) {
+				const lineRef = lineNumber !== undefined ? ` line ${lineNumber}:` : "";
+				process.stderr.write(
+					`Warning:${lineRef} unclosed quoted field starting at position ${fieldStart - 1}\n`,
+				);
+			}
 			fields.push(value);
 			// Skip the delimiter (or accept end of line)
 			if (i < len && line[i] === delimiter) {
 				i++;
+			} else if (i >= len) {
+				break;
 			}
 		} else {
 			// Unquoted field — read until next delimiter or end of line
@@ -133,6 +144,40 @@ export function validateColumns(
 	}
 }
 
+/**
+ * Parse a raw CSV amount string into a number.
+ *
+ * Returns 0 for empty strings or lone dashes (common in bank exports for
+ * fields that have no value). Throws for genuinely invalid values.
+ *
+ * @param raw     - The raw string from the CSV cell.
+ * @param options - Pass `{ required: true }` to throw when the field is empty
+ *                  or a lone dash rather than silently returning 0.
+ */
+export function parseAmount(raw: string, options?: { required?: boolean }): number {
+	const trimmed = raw.trim();
+	if (trimmed === "" || trimmed === "-") {
+		if (options?.required) {
+			throw new Error(`Required amount field is empty or invalid: "${raw}"`);
+		}
+		return 0;
+	}
+	const value = Number.parseFloat(trimmed);
+	if (Number.isNaN(value)) {
+		throw new Error(`Invalid amount value: "${raw}"`);
+	}
+	if (!Number.isFinite(value)) {
+		throw new Error(`Invalid amount value: "${raw}"`);
+	}
+	return value;
+}
+
+/** Normalise an IBAN: strip spaces, uppercase. Returns undefined if empty. */
+export function normaliseIban(raw: string): string | undefined {
+	const cleaned = raw.replace(/\s+/g, "").toUpperCase();
+	return cleaned.length > 0 ? cleaned : undefined;
+}
+
 export function parseCsv(content: string, options?: ParseCsvOptions): CsvRow[] {
 	// Normalise line endings
 	const rawLines = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
@@ -156,7 +201,7 @@ export function parseCsv(content: string, options?: ParseCsvOptions): CsvRow[] {
 		const line = rawLines[lineIdx] ?? "";
 		if (line.trim() === "") continue;
 
-		const values = parseCsvLine(line, delimiter);
+		const values = parseCsvLine(line, delimiter, lineIdx + 1);
 		const row: CsvRow = {};
 
 		for (let col = 0; col < headers.length; col++) {

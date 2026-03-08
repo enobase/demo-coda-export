@@ -65,6 +65,52 @@ export function extractBankIdFromIban(iban: string): string | null {
 	return normalized.slice(4, 7);
 }
 
+/**
+ * Validate an IBAN using the ISO 7064 MOD-97-10 algorithm.
+ *
+ * Steps:
+ *   1. Strip spaces and uppercase
+ *   2. Check basic format: 2 letters + 2 digits + BBAN
+ *   3. Move the first 4 characters to the end
+ *   4. Replace letters with their numeric equivalents (A=10, B=11, ..., Z=35)
+ *   5. Compute the remainder modulo 97 — must equal 1
+ *
+ * Also validates country-specific length for known countries.
+ */
+
+const IBAN_LENGTHS: Record<string, number> = {
+	BE: 16, DE: 22, FR: 27, NL: 18, LU: 20, AT: 20, ES: 24, IT: 27,
+	PT: 25, GB: 22, IE: 22, CH: 21, DK: 18, SE: 24, NO: 15, FI: 18,
+};
+
+export function validateIban(iban: string): boolean {
+	if (!iban || typeof iban !== "string") return false;
+
+	const normalized = iban.replace(/\s/g, "").toUpperCase();
+
+	// Must start with 2 letters + 2 digits
+	if (!/^[A-Z]{2}\d{2}/.test(normalized)) return false;
+
+	// Must be at least 5 chars (country + check + at least 1 BBAN char)
+	if (normalized.length < 5) return false;
+
+	// Check country-specific length if known
+	const country = normalized.slice(0, 2);
+	const expectedLength = IBAN_LENGTHS[country];
+	if (expectedLength !== undefined && normalized.length !== expectedLength) return false;
+
+	// MOD-97 check
+	const rearranged = normalized.slice(4) + normalized.slice(0, 4);
+	const numeric = rearranged.replace(/[A-Z]/g, (c) => String(c.charCodeAt(0) - 55));
+
+	let remainder = 0n;
+	for (const chunk of numeric.match(/.{1,15}/g) ?? []) {
+		remainder = BigInt(String(remainder) + chunk) % 97n;
+	}
+
+	return remainder === 1n;
+}
+
 // ---------------------------------------------------------------------------
 // BIC lookup
 // ---------------------------------------------------------------------------
