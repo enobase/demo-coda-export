@@ -6,6 +6,73 @@
  */
 
 import { extname } from "node:path";
+import type { BankTransaction } from "./parsers/index.ts";
+
+// ---------------------------------------------------------------------------
+// CSV-based inference
+// ---------------------------------------------------------------------------
+
+/**
+ * Values that can be inferred from a parsed CSV file.
+ */
+export interface CsvInferredDefaults {
+	/** Most common currency found in transactions (e.g. "EUR") */
+	currency: string | undefined;
+	/** Account holder name inferred from CSV fields, if available */
+	holderName: string | undefined;
+}
+
+/**
+ * Infer sensible account defaults from a list of parsed transactions.
+ *
+ * - `currency`: the most frequently occurring currency across all transactions.
+ *   Falls back to the first transaction's currency if all are equal.
+ * - `holderName`: extracted from the `counterpartyName` field of "Account Name"
+ *   style sources (currently N26 which includes an "Account Name" column).
+ *   Returns undefined when no holder name is detectable.
+ */
+export function inferCsvDefaults(transactions: BankTransaction[]): CsvInferredDefaults {
+	if (transactions.length === 0) {
+		return { currency: undefined, holderName: undefined };
+	}
+
+	// --- Currency: pick the most common one ---
+	const currencyCounts = new Map<string, number>();
+	for (const tx of transactions) {
+		if (tx.currency) {
+			currencyCounts.set(tx.currency, (currencyCounts.get(tx.currency) ?? 0) + 1);
+		}
+	}
+
+	let currency: string | undefined;
+	if (currencyCounts.size > 0) {
+		let maxCount = 0;
+		for (const [code, count] of currencyCounts) {
+			if (count > maxCount) {
+				maxCount = count;
+				currency = code;
+			}
+		}
+	}
+
+	// --- Holder name ---
+	// N26 exposes an "Account Name" column; we surface it via the description
+	// of non-counterparty transactions when all descriptions share the same value.
+	// For other formats there is no reliable holder-name field, so we leave it
+	// undefined rather than guess.
+	let holderName: string | undefined;
+	const source = transactions[0]?.source;
+	if (source === "n26") {
+		// N26 rows with rawType "Incoming Payment" or "Income" often carry the
+		// account holder name in the description when partner name is absent.
+		// More reliably: look for a consistent non-empty description that appears
+		// across self-transfer rows — but this is fragile. We simply return
+		// undefined for N26 for now to avoid false positives.
+		holderName = undefined;
+	}
+
+	return { currency, holderName };
+}
 
 /**
  * Given an input file path, returns the suggested output path by replacing

@@ -7,7 +7,8 @@
  */
 
 import { describe, expect, it } from "bun:test";
-import { inferOpeningDate, inferOutputPath } from "../defaults.ts";
+import { inferOpeningDate, inferOutputPath, inferCsvDefaults } from "../defaults.ts";
+import type { BankTransaction } from "../parsers/index.ts";
 
 // ---------------------------------------------------------------------------
 // inferOutputPath
@@ -90,5 +91,103 @@ describe("inferOpeningDate()", () => {
 		expect(result!.getUTCFullYear()).toBe(2026);
 		expect(result!.getUTCMonth()).toBe(2); // March = 2
 		expect(result!.getUTCDate()).toBe(28);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// inferCsvDefaults
+// ---------------------------------------------------------------------------
+
+function makeTx(overrides: Partial<BankTransaction>): BankTransaction {
+	return {
+		date: new Date("2026-01-10"),
+		amount: 100,
+		currency: "EUR",
+		description: "Test",
+		source: "revolut-personal",
+		...overrides,
+	};
+}
+
+describe("inferCsvDefaults()", () => {
+	it("returns undefined values for an empty transactions array", () => {
+		const result = inferCsvDefaults([]);
+		expect(result.currency).toBeUndefined();
+		expect(result.holderName).toBeUndefined();
+	});
+
+	it("returns the currency when all transactions share one currency", () => {
+		const txs = [
+			makeTx({ currency: "EUR" }),
+			makeTx({ currency: "EUR" }),
+			makeTx({ currency: "EUR" }),
+		];
+		const result = inferCsvDefaults(txs);
+		expect(result.currency).toBe("EUR");
+	});
+
+	it("returns the most common currency when multiple currencies are present", () => {
+		const txs = [
+			makeTx({ currency: "EUR" }),
+			makeTx({ currency: "EUR" }),
+			makeTx({ currency: "USD" }),
+		];
+		const result = inferCsvDefaults(txs);
+		expect(result.currency).toBe("EUR");
+	});
+
+	it("returns a currency even for a single transaction", () => {
+		const result = inferCsvDefaults([makeTx({ currency: "GBP" })]);
+		expect(result.currency).toBe("GBP");
+	});
+
+	it("handles transactions from revolut-personal source", () => {
+		const txs = [
+			makeTx({ currency: "EUR", source: "revolut-personal" }),
+			makeTx({ currency: "EUR", source: "revolut-personal" }),
+		];
+		const result = inferCsvDefaults(txs);
+		expect(result.currency).toBe("EUR");
+		expect(result.holderName).toBeUndefined();
+	});
+
+	it("handles transactions from qonto source", () => {
+		const txs = [
+			makeTx({ currency: "EUR", source: "qonto" }),
+			makeTx({ currency: "EUR", source: "qonto" }),
+		];
+		const result = inferCsvDefaults(txs);
+		expect(result.currency).toBe("EUR");
+		expect(result.holderName).toBeUndefined();
+	});
+
+	it("handles transactions from n26 source", () => {
+		const txs = [
+			makeTx({ currency: "EUR", source: "n26" }),
+		];
+		const result = inferCsvDefaults(txs);
+		expect(result.currency).toBe("EUR");
+		// N26 does not expose a reliable holder name
+		expect(result.holderName).toBeUndefined();
+	});
+
+	it("handles transactions from wise source", () => {
+		const txs = [
+			makeTx({ currency: "GBP", source: "wise" }),
+			makeTx({ currency: "GBP", source: "wise" }),
+		];
+		const result = inferCsvDefaults(txs);
+		expect(result.currency).toBe("GBP");
+	});
+
+	it("handles transactions from revolut-business source", () => {
+		const txs = [
+			makeTx({ currency: "USD", source: "revolut-business" }),
+			makeTx({ currency: "EUR", source: "revolut-business" }),
+			makeTx({ currency: "USD", source: "revolut-business" }),
+		];
+		const result = inferCsvDefaults(txs);
+		// USD appears twice, EUR once
+		expect(result.currency).toBe("USD");
 	});
 });
