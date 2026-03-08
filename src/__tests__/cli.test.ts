@@ -10,6 +10,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildCodaConfig, loadConfigFile, parseArgs } from "../cli.ts";
+import { inferCsvDefaults } from "../defaults.ts";
+import { parseTransactions } from "../parsers/index.ts";
 
 // ---------------------------------------------------------------------------
 // parseArgs()
@@ -218,5 +220,74 @@ describe("buildCodaConfig()", () => {
 		const flags = { ...BASE_FLAGS, "opening-balance": "-250.75" };
 		const config = buildCodaConfig(flags);
 		expect(config.openingBalance).toBe(-250.75);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// init --input: CSV-based inference integration
+// ---------------------------------------------------------------------------
+
+describe("init --input: inferCsvDefaults() via parseTransactions()", () => {
+	const REVOLUT_PERSONAL_CSV = [
+		"Type,Product,Started Date,Completed Date,Description,Amount,Fee,Currency,State,Balance",
+		"CARD_PAYMENT,Current,2026-01-15 10:00:00,2026-01-15 14:00:00,Supermarket,-42.50,0.00,EUR,COMPLETED,1957.50",
+		"TRANSFER,Current,2026-01-16 09:00:00,2026-01-16 09:05:00,Rent,-500.00,0.00,EUR,COMPLETED,1457.50",
+		"TOPUP,Current,2026-01-17 08:00:00,2026-01-17 08:01:00,Top-Up,2000.00,0.00,EUR,COMPLETED,3457.50",
+	].join("\n");
+
+	const QONTO_CSV = [
+		"Status,Settlement date (UTC),Operation date (UTC),Total amount (incl. VAT),Currency,Counterparty name,Payment method,Transaction ID,IBAN,Reference,Category,Note,VAT amount,Initiator",
+		"settled,2026-01-10 08:00:00,2026-01-10 08:00:00,-150.00,EUR,Proximus,direct_debit,qt_001,BE95001234567890,,,,,Admin",
+		"settled,2026-01-12 10:00:00,2026-01-12 10:00:00,5000.00,EUR,Client Alpha,transfer,qt_002,,,,,0.00,Admin",
+	].join("\n");
+
+	const WISE_GBP_CSV = [
+		"TransferWise ID,Date,Amount,Currency,Description,Payment Reference,Running Balance,Exchange From,Exchange To,Exchange Rate,Payer Name,Payee Name,Payee Account Number,Merchant,Card Last Four Digits,Card Holder Full Name,Attachment,Note,Total Fees",
+		"W001,15-01-2026,500.00,GBP,Salary,,1500.00,,,,Employer Ltd,,,,,,,, 0.00",
+		"W002,16-01-2026,-50.00,GBP,Groceries,,1450.00,,,,,Tesco,,,,,,, 0.00",
+	].join("\n");
+
+	it("parses --input flag correctly in parseArgs", () => {
+		const { flags } = parseArgs(["init", "--input", "transactions.csv"]);
+		expect(flags.input).toBe("transactions.csv");
+	});
+
+	it("infers EUR currency from Revolut Personal CSV", () => {
+		const transactions = parseTransactions(REVOLUT_PERSONAL_CSV);
+		const { currency } = inferCsvDefaults(transactions);
+		expect(currency).toBe("EUR");
+	});
+
+	it("infers EUR currency from Qonto CSV", () => {
+		const transactions = parseTransactions(QONTO_CSV);
+		const { currency } = inferCsvDefaults(transactions);
+		expect(currency).toBe("EUR");
+	});
+
+	it("infers GBP currency from Wise CSV", () => {
+		const transactions = parseTransactions(WISE_GBP_CSV);
+		const { currency } = inferCsvDefaults(transactions);
+		expect(currency).toBe("GBP");
+	});
+
+	it("returns no holder name when source does not expose one", () => {
+		const transactions = parseTransactions(REVOLUT_PERSONAL_CSV);
+		const { holderName } = inferCsvDefaults(transactions);
+		expect(holderName).toBeUndefined();
+	});
+
+	it("works end-to-end: write CSV to tmp file, parse it, infer defaults", () => {
+		const TMP = join(tmpdir(), `coda-init-test-${process.pid}`);
+		mkdirSync(TMP, { recursive: true });
+		const csvPath = join(TMP, "transactions.csv");
+		writeFileSync(csvPath, QONTO_CSV);
+
+		const content = require("node:fs").readFileSync(csvPath, "utf-8");
+		const transactions = parseTransactions(content);
+		const { currency, holderName } = inferCsvDefaults(transactions);
+
+		expect(currency).toBe("EUR");
+		expect(holderName).toBeUndefined();
+		expect(transactions.length).toBe(2);
 	});
 });

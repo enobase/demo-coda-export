@@ -29,7 +29,7 @@ import { detectFormat, parseTransactions } from "./parsers/index.ts";
 import { serializeCoda } from "./serializer.ts";
 import { validate } from "./validator.ts";
 import { extractBankIdFromIban, lookupBic } from "./belgian-banks.ts";
-import { inferOutputPath, inferOpeningDate } from "./defaults.ts";
+import { inferOutputPath, inferOpeningDate, inferCsvDefaults } from "./defaults.ts";
 import { prompt as promptUser, isTTY, logDerived } from "./prompt.ts";
 
 // ---------------------------------------------------------------------------
@@ -311,15 +311,20 @@ const HELP_INIT = `
 coda-export init — Create a config file interactively
 
 Usage:
-  coda-export init
+  coda-export init [--input <file.csv>]
 
 Prompts for your account details (IBAN, holder name, currency) and creates
 a config file. Bank ID and BIC are auto-derived from Belgian IBANs.
 
+When --input is provided, the CSV is parsed to infer defaults such as the
+account currency. Prompts are pre-filled with inferred values so you can
+confirm or overwrite them.
+
 The config file is auto-discovered at ./coda-export.json or ~/.coda-export.json.
 
 Options:
-  --help  Show this help message
+  --input <path>  Optional path to a CSV export to infer defaults from
+  --help          Show this help message
 `.trimStart();
 
 // ---------------------------------------------------------------------------
@@ -563,6 +568,47 @@ async function cmdInit(flags: Record<string, string>): Promise<void> {
 		return;
 	}
 
+	// Optionally parse an input CSV to infer defaults
+	let inferredCurrency: string | undefined;
+	let inferredHolder: string | undefined;
+
+	const inputPath = flags.input;
+	if (inputPath) {
+		let csvContent: string;
+		try {
+			csvContent = readFileSync(inputPath, "utf-8");
+		} catch (e) {
+			process.stderr.write(
+				`Error: Cannot read input file "${inputPath}": ${(e as NodeJS.ErrnoException).message}\n`,
+			);
+			process.exit(1);
+		}
+
+		let transactions: ReturnType<typeof parseTransactions>;
+		try {
+			transactions = parseTransactions(csvContent);
+		} catch (e) {
+			process.stderr.write(
+				`Warning: Could not parse "${inputPath}" for defaults: ${(e as Error).message}\n`,
+			);
+			transactions = [];
+		}
+
+		if (transactions.length > 0) {
+			const { currency, holderName } = inferCsvDefaults(transactions);
+			inferredCurrency = currency;
+			inferredHolder = holderName;
+
+			const detected = detectFormat(csvContent);
+			if (detected) {
+				process.stderr.write(`  ℹ  Detected format: ${detected}\n`);
+			}
+			if (inferredCurrency) {
+				process.stderr.write(`  ℹ  Inferred currency: ${inferredCurrency} (from CSV transactions)\n`);
+			}
+		}
+	}
+
 	const configPath = await promptUser("Config file path", "coda-export.json");
 	const iban = await promptUser("Account IBAN (e.g. BE68539007547034)");
 
@@ -581,8 +627,10 @@ async function cmdInit(flags: Record<string, string>): Promise<void> {
 	if (bankId) logDerived("Bank ID", bankId);
 	if (bic) logDerived("BIC", bic);
 
-	const holder = await promptUser("Account holder name (max 26 chars)");
-	const currency = await promptUser("Account currency", "EUR");
+	// Pre-fill holder name with CSV-inferred value if available
+	const holder = await promptUser("Account holder name (max 26 chars)", inferredHolder);
+	// Pre-fill currency with CSV-inferred value, falling back to EUR
+	const currency = await promptUser("Account currency", inferredCurrency ?? "EUR");
 	const companyId = await promptUser("Company ID / enterprise number (optional, press Enter to skip)");
 	const description = await promptUser("Account description (optional, press Enter to skip)");
 
