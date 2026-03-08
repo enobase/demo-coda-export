@@ -11,18 +11,10 @@ git clone <repo-url> && cd demo-coda-export
 bun install
 ```
 
-Create a config file for each bank account (e.g. `my-account.json`):
+Create a config file interactively — you provide your IBAN, the rest is auto-derived:
 
-```json
-{
-  "bankId": "539",
-  "accountIban": "BE68539007547034",
-  "accountCurrency": "EUR",
-  "accountHolderName": "ACME BVBA",
-  "bic": "KREDBEBB",
-  "openingBalance": 1234.56,
-  "openingBalanceDate": "2026-01-01"
-}
+```bash
+bun run src/cli.ts init
 ```
 
 ## Usage
@@ -46,7 +38,7 @@ bun run src/cli.ts --help                                # all options
 
 ## Why this exists
 
-Belgian accountants need CODA files. Traditional Belgian banks charge for them — typically around 5 EUR/month per account, which is a remarkably creative way to monetise a file format from the 1990s.
+A lot of Belgian accountants require CODA files. Traditional Belgian banks charge for them — typically around 5 EUR/month per account, which is a remarkably creative way to monetise a file format from the 1990s.
 
 <p align="center">
   <img src="assets/coda-export-fee.png" alt="CODA export fee on a bank statement" width="500" />
@@ -54,7 +46,7 @@ Belgian accountants need CODA files. Traditional Belgian banks charge for them �
   <em>Spot something like this in your monthly fees? That's a file conversion charge.</em>
 </p>
 
-Meanwhile, neobanks like Revolut, Qonto, N26, and Wise offer rather better banking experiences but don't produce CODA files, because why would they. This leaves you choosing between a modern bank and a format your accountant will accept.
+Meanwhile, neobanks like Revolut, Qonto, N26, and Wise offer rather better digital banking experiences but don't produce CODA files, because why would they. This leaves you choosing between a modern bank and a format your accountant will accept.
 
 This tool removes that choice. Export CSV, run the converter, get a valid CODA 2.6 file.
 
