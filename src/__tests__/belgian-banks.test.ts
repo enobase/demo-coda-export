@@ -10,6 +10,7 @@ import {
 	extractBankIdFromIban,
 	findBankByName,
 	lookupBic,
+	validateIban,
 } from "../belgian-banks.ts";
 
 // ---------------------------------------------------------------------------
@@ -264,5 +265,62 @@ describe("BELGIAN_BANKS map", () => {
 			expect(entry.bic.length).toBeGreaterThan(0);
 			expect(Array.isArray(entry.aliases)).toBe(true);
 		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// validateIban
+// ---------------------------------------------------------------------------
+
+describe("validateIban", () => {
+	it("validates a correct Belgian IBAN", () => {
+		expect(validateIban("BE68539007547034")).toBe(true);
+	});
+
+	it("validates a correct German IBAN", () => {
+		expect(validateIban("DE89370400440532013000")).toBe(true);
+	});
+
+	it("validates a correct Dutch IBAN", () => {
+		expect(validateIban("NL91ABNA0417164300")).toBe(true);
+	});
+
+	it("validates a correct French IBAN", () => {
+		expect(validateIban("FR7630006000011234567890189")).toBe(true);
+	});
+
+	it("validates a correct Luxembourg IBAN", () => {
+		expect(validateIban("LU280019400644750000")).toBe(true);
+	});
+
+	it("rejects an IBAN with invalid check digits", () => {
+		expect(validateIban("BE99539007547034")).toBe(false);
+	});
+
+	it("rejects an IBAN with wrong length for country", () => {
+		expect(validateIban("BE6853900754703")).toBe(false);  // 15 chars, should be 16
+	});
+
+	it("rejects an empty string", () => {
+		expect(validateIban("")).toBe(false);
+	});
+
+	it("handles IBAN with spaces (strips them)", () => {
+		expect(validateIban("BE68 5390 0754 7034")).toBe(true);
+	});
+
+	it("handles lowercase input", () => {
+		expect(validateIban("be68539007547034")).toBe(true);
+	});
+
+	it("rejects garbage string", () => {
+		expect(validateIban("XX99garbage")).toBe(false);
+	});
+
+	it("rejects non-string input", () => {
+		// @ts-expect-error -- testing runtime guard
+		expect(validateIban(null)).toBe(false);
+		// @ts-expect-error -- testing runtime guard
+		expect(validateIban(undefined)).toBe(false);
 	});
 });

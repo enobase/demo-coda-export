@@ -43,6 +43,6 @@ export function inferOpeningDate(transactions: { date: Date }[]): Date | null {
 	);
 
 	const result = new Date(earliest);
-	result.setDate(result.getDate() - 1);
+	result.setUTCDate(result.getUTCDate() - 1);
 	return result;
 }

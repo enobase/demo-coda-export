@@ -11,7 +11,7 @@
  * Auto-detection key: presence of "Beneficiary IBAN" in the header.
  */
 
-import { parseCsv, validateColumns } from "./csv.ts";
+import { parseCsv, parseAmount, validateColumns, normaliseIban } from "./csv.ts";
 import type { BankTransaction, InputFormat, InputParser } from "./types.ts";
 
 /**
@@ -28,22 +28,6 @@ function parseDate(raw: string): Date {
 	}
 
 	throw new Error(`Unrecognised Revolut Business date format: "${raw}"`);
-}
-
-function parseAmount(raw: string): number {
-	const trimmed = raw.trim();
-	if (trimmed === "" || trimmed === "-") return 0;
-	const value = Number.parseFloat(trimmed);
-	if (Number.isNaN(value)) {
-		throw new Error(`Invalid amount value: "${raw}"`);
-	}
-	return value;
-}
-
-/** Normalise an IBAN: strip spaces, uppercase */
-function normaliseIban(raw: string): string | undefined {
-	const cleaned = raw.replace(/\s+/g, "").toUpperCase();
-	return cleaned.length > 0 ? cleaned : undefined;
 }
 
 /** Normalise a BIC: strip spaces, uppercase */
@@ -101,7 +85,7 @@ export const revolutBusinessParser: InputParser = {
 
 			const tx: BankTransaction = {
 				date: parseDate(completedDateRaw),
-				amount: parseAmount(amountRaw),
+				amount: parseAmount(amountRaw, { required: true }),
 				currency: (row["Payment currency"] ?? "").trim(),
 				description: (row.Description ?? "").trim(),
 				rawType: (row.Type ?? "").trim(),

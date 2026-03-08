@@ -192,6 +192,18 @@ describe("toMilliCents", () => {
 		// 1.2345 * 1000 = 1234.5 → rounds to 1235
 		expect(toMilliCents(1.2345)).toBe(1235n);
 	});
+
+	it("throws for Infinity", () => {
+		expect(() => toMilliCents(Infinity)).toThrow("Amount must be a finite number");
+	});
+
+	it("throws for -Infinity", () => {
+		expect(() => toMilliCents(-Infinity)).toThrow("Amount must be a finite number");
+	});
+
+	it("throws for NaN", () => {
+		expect(() => toMilliCents(NaN)).toThrow("Amount must be a finite number");
+	});
 });
 
 describe("toSignCode", () => {

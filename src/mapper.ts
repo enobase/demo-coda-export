@@ -17,6 +17,7 @@
  */
 
 import type { BankTransaction } from "./parsers/types.ts";
+import { validateIban } from "./belgian-banks.ts";
 import { formatDate, serializeAccountInfo } from "./serializer.ts";
 import type {
 	AccountInfo,
@@ -143,6 +144,9 @@ export function detectOgm(value: string): string | null {
  *   0.1 + 0.2 = 0.30000000000000004 → 300n  (correctly rounded)
  */
 export function toMilliCents(amount: number): bigint {
+	if (!Number.isFinite(amount)) {
+		throw new Error(`Amount must be a finite number, got ${amount}`);
+	}
 	const abs = Math.abs(amount);
 	const rounded = Math.round(abs * 1000);
 	return BigInt(rounded);
@@ -291,6 +295,9 @@ export function buildCounterpartyAccountRaw(
 	}
 
 	const normalized = counterpartyIban.replace(/\s+/g, "").toUpperCase();
+	if (!validateIban(normalized)) {
+		process.stderr.write(`Warning: counterparty IBAN has invalid check digit: ${normalized}\n`);
+	}
 	const structure = ibanToAccountStructure(normalized);
 	return serializeAccountInfo(structure, normalized, currency);
 }
@@ -366,6 +373,11 @@ export function validateConfig(config: CodaConfig): void {
 	if (!/^[A-Z]{2}\d{2}/i.test(config.accountIban)) {
 		throw new Error(
 			`CodaConfig.accountIban must start with 2 letters + 2 digits, got "${config.accountIban}"`,
+		);
+	}
+	if (!validateIban(config.accountIban)) {
+		throw new Error(
+			`CodaConfig.accountIban has an invalid IBAN check digit: "${config.accountIban}"`,
 		);
 	}
 
@@ -561,7 +573,7 @@ export function mapToCoda(transactions: BankTransaction[], config: CodaConfig): 
 		};
 		movementRecords.push(rec21);
 
-		// Record 22 (continuation) — emit when there's spill communication or counterparty BIC
+		// Record 22 (continuation) — emit when there's spill communication, counterparty BIC, or counterparty IBAN/name
 		if (needsRecord22 || needsRecord23) {
 			const rec22: Record22MovementContinuation = {
 				recordType: "22",

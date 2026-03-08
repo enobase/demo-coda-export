@@ -9,7 +9,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { detectDelimiter, parseCsv, parseCsvLine, validateColumns } from "../csv.ts";
+import { detectDelimiter, parseCsv, parseCsvLine, parseAmount, validateColumns } from "../csv.ts";
 import { detectFormat, parseTransactions } from "../index.ts";
 import { n26Parser } from "../n26.ts";
 import { qontoParser } from "../qonto.ts";
@@ -1260,5 +1260,81 @@ describe("parseTransactions — N26 and Wise auto-detect", () => {
 	test("explicit wise format bypasses detection", () => {
 		const txns = parseTransactions(fixture("wise.csv"), "wise");
 		expect(txns).toHaveLength(6);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// parseAmount (shared utility)
+// ---------------------------------------------------------------------------
+
+describe("parseAmount (shared)", () => {
+	test("parses a normal positive number", () => {
+		expect(parseAmount("42.50")).toBe(42.5);
+	});
+
+	test("parses a negative number", () => {
+		expect(parseAmount("-10.00")).toBe(-10);
+	});
+
+	test("returns 0 for empty string when not required", () => {
+		expect(parseAmount("")).toBe(0);
+	});
+
+	test("returns 0 for dash when not required", () => {
+		expect(parseAmount("-")).toBe(0);
+	});
+
+	test("throws for empty string when required", () => {
+		expect(() => parseAmount("", { required: true })).toThrow("Required amount field is empty");
+	});
+
+	test("throws for dash when required", () => {
+		expect(() => parseAmount("-", { required: true })).toThrow("Required amount field is empty");
+	});
+
+	test("throws for non-numeric value", () => {
+		expect(() => parseAmount("abc")).toThrow("Invalid amount value");
+	});
+
+	test("throws for Infinity", () => {
+		expect(() => parseAmount("Infinity")).toThrow("Invalid amount value");
+	});
+
+	test("trims whitespace", () => {
+		expect(parseAmount("  42.50  ")).toBe(42.5);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// CSV parser edge cases
+// ---------------------------------------------------------------------------
+
+describe("parseCsvLine edge cases", () => {
+	test("unclosed quote consumes to end of line as single field", () => {
+		// The value is still returned (lenient parsing), but a warning is emitted
+		const result = parseCsvLine('"unclosed,next,field', ",");
+		// Everything after the opening quote is one field value
+		expect(result).toEqual(["unclosed,next,field"]);
+	});
+
+	test("properly escaped embedded quotes parse correctly", () => {
+		const result = parseCsvLine('"SARL ""LE COMPTOIR""",other', ",");
+		expect(result).toEqual(['SARL "LE COMPTOIR"', "other"]);
+	});
+
+	test("extra values beyond headers are dropped by parseCsv", () => {
+		const csv = "A,B\n1,2,3\n";
+		const rows = parseCsv(csv);
+		expect(rows.length).toBe(1);
+		expect(rows[0]).toEqual({ A: "1", B: "2" });
+		// The extra value "3" is not in the row object
+		expect(Object.keys(rows[0]!).length).toBe(2);
+	});
+
+	test("fewer values than headers get empty string", () => {
+		const csv = "A,B,C\n1\n";
+		const rows = parseCsv(csv);
+		expect(rows.length).toBe(1);
+		expect(rows[0]).toEqual({ A: "1", B: "", C: "" });
 	});
 });

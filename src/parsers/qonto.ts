@@ -11,7 +11,7 @@
  * Auto-detection key: presence of "Settlement date (UTC)" in the header.
  */
 
-import { parseCsv, validateColumns } from "./csv.ts";
+import { parseCsv, parseAmount, validateColumns, normaliseIban } from "./csv.ts";
 import type { BankTransaction, InputFormat, InputParser } from "./types.ts";
 
 const ACCEPTED_STATUSES = new Set(["settled", "executed"]);
@@ -38,22 +38,6 @@ function parseDate(raw: string): Date {
 	}
 
 	throw new Error(`Unrecognised Qonto date format: "${raw}"`);
-}
-
-function parseAmount(raw: string): number {
-	const trimmed = raw.trim();
-	if (trimmed === "" || trimmed === "-") return 0;
-	const value = Number.parseFloat(trimmed);
-	if (Number.isNaN(value)) {
-		throw new Error(`Invalid amount value: "${raw}"`);
-	}
-	return value;
-}
-
-/** Normalise an IBAN: strip spaces, uppercase */
-function normaliseIban(raw: string): string | undefined {
-	const cleaned = raw.replace(/\s+/g, "").toUpperCase();
-	return cleaned.length > 0 ? cleaned : undefined;
 }
 
 export const qontoParser: InputParser = {
@@ -99,7 +83,7 @@ export const qontoParser: InputParser = {
 
 			const tx: BankTransaction = {
 				date: parseDate(settlementDateRaw),
-				amount: parseAmount(amountRaw),
+				amount: parseAmount(amountRaw, { required: true }),
 				currency: (row.Currency ?? "").trim(),
 				description: counterpartyName ?? (row["Transaction ID"] ?? "").trim(),
 				source: "qonto",

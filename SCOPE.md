@@ -8,7 +8,7 @@ production accounting workflow.
 
 ## Fully tested and guaranteed
 
-The following behaviours are covered by the test suite (611 tests) and are considered reliable.
+The following behaviours are covered by the test suite (709 tests) and are considered reliable.
 
 ### CODA record types generated
 

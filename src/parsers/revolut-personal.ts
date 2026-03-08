@@ -8,7 +8,7 @@
  * Only COMPLETED rows are imported.
  */
 
-import { parseCsv, validateColumns } from "./csv.ts";
+import { parseCsv, parseAmount, validateColumns } from "./csv.ts";
 import type { BankTransaction, InputFormat, InputParser } from "./types.ts";
 
 /** Signature columns that identify this format */
@@ -71,16 +71,6 @@ function parseRevolutDate(raw: string): Date {
 	throw new Error(`Unrecognised Revolut date format: "${raw}"`);
 }
 
-function parseAmount(raw: string): number {
-	const trimmed = raw.trim();
-	if (trimmed === "" || trimmed === "-") return 0;
-	const value = Number.parseFloat(trimmed);
-	if (Number.isNaN(value)) {
-		throw new Error(`Invalid amount value: "${raw}"`);
-	}
-	return value;
-}
-
 export const revolutPersonalParser: InputParser = {
 	name: "Revolut Personal",
 	format: "revolut-personal" as InputFormat,
@@ -122,7 +112,7 @@ export const revolutPersonalParser: InputParser = {
 
 			const tx: BankTransaction = {
 				date: parseRevolutDate(completedDateRaw),
-				amount: parseAmount(amountRaw),
+				amount: parseAmount(amountRaw, { required: true }),
 				currency: (row.Currency ?? "").trim(),
 				description: (row.Description ?? "").trim(),
 				rawType: (row.Type ?? "").trim(),

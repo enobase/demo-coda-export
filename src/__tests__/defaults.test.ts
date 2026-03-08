@@ -76,4 +76,19 @@ describe("inferOpeningDate()", () => {
 		// Day before 2026-01-01 is 2025-12-31
 		expect(result?.toISOString().slice(0, 10)).toBe("2025-12-31");
 	});
+
+	it("uses UTC arithmetic — not affected by local timezone offset", () => {
+		// Create a date at UTC midnight. With local-time setDate/getDate in a
+		// positive-offset timezone (e.g. UTC+13), the local date is already
+		// "tomorrow" relative to the UTC date, so subtracting 1 day in local
+		// time could yield a different UTC date than expected.
+		// Using setUTCDate/getUTCDate avoids this.
+		const txDate = new Date("2026-03-29T00:00:00Z");
+		const result = inferOpeningDate([{ date: txDate }]);
+		expect(result).not.toBeNull();
+		// Should always be 2026-03-28 regardless of local timezone
+		expect(result!.getUTCFullYear()).toBe(2026);
+		expect(result!.getUTCMonth()).toBe(2); // March = 2
+		expect(result!.getUTCDate()).toBe(28);
+	});
 });

@@ -10,7 +10,7 @@
  * Detection: header contains "TransferWise ID"
  */
 
-import { parseCsv, validateColumns } from "./csv.ts";
+import { parseCsv, parseAmount, validateColumns, normaliseIban } from "./csv.ts";
 import type { BankTransaction, InputFormat, InputParser } from "./types.ts";
 
 /** Columns that must be present for the parser to operate correctly */
@@ -30,28 +30,12 @@ function parseDate(raw: string): Date {
 	throw new Error(`Unrecognised Wise date format: "${raw}"`);
 }
 
-function parseAmount(raw: string): number {
-	const trimmed = raw.trim();
-	if (trimmed === "" || trimmed === "-") return 0;
-	const value = Number.parseFloat(trimmed);
-	if (Number.isNaN(value)) {
-		throw new Error(`Invalid amount value: "${raw}"`);
-	}
-	return value;
-}
-
 /**
  * Detect whether a string looks like an IBAN:
  * starts with 2 uppercase letters followed by 2 digits.
  */
 function looksLikeIban(value: string): boolean {
 	return /^[A-Za-z]{2}\d{2}/.test(value.trim());
-}
-
-/** Normalise an IBAN: strip spaces, uppercase */
-function normaliseIban(raw: string): string | undefined {
-	const cleaned = raw.replace(/\s+/g, "").toUpperCase();
-	return cleaned.length > 0 ? cleaned : undefined;
 }
 
 export const wiseParser: InputParser = {
@@ -76,7 +60,7 @@ export const wiseParser: InputParser = {
 			}
 
 			const amountRaw = row.Amount ?? "";
-			const amount = parseAmount(amountRaw);
+			const amount = parseAmount(amountRaw, { required: true });
 
 			// Counterparty logic: credits use Payer Name, debits use Payee Name or Merchant
 			let counterpartyName: string | undefined;
