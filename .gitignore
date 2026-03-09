@@ -38,3 +38,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # Generated CODA files (may contain real financial data)
 *.cod
+
+# Local export output
+coda-export.json
