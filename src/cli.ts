@@ -148,7 +148,12 @@ export function buildCodaConfig(
 	let bankId = flags["bank-id"] ?? configFile?.bankId ?? "";
 	if (!bankId && accountIban) {
 		const derived = extractBankIdFromIban(accountIban);
-		if (derived) bankId = derived;
+		if (derived) {
+			bankId = derived;
+		} else if (accountIban.length >= 7) {
+			// Non-Belgian IBAN: use first 3 chars of the BBAN as a generic identifier
+			bankId = accountIban.replace(/\s/g, "").toUpperCase().slice(4, 7);
+		}
 	}
 
 	// Auto-derive BIC from bankId if not explicitly provided
@@ -397,6 +402,15 @@ async function cmdConvert(flags: Record<string, string>): Promise<void> {
 		}
 	}
 
+	// Infer opening balance from running balance column (e.g. Qonto FR "Solde")
+	if (!flags["opening-balance"] && configFile?.openingBalance === undefined) {
+		const { openingBalance } = inferCsvDefaults(transactions);
+		if (openingBalance !== undefined) {
+			flags["opening-balance"] = String(openingBalance);
+			process.stderr.write(`  ✓ Opening balance: ${openingBalance} (inferred from CSV running balance)\n`);
+		}
+	}
+
 	// Interactive mode: show auto-derived values and prompt for missing required ones
 	if (isTTY()) {
 		const accountIban = flags["account-iban"] ?? configFile?.accountIban;
@@ -571,6 +585,7 @@ async function cmdInit(flags: Record<string, string>): Promise<void> {
 	// Optionally parse an input CSV to infer defaults
 	let inferredCurrency: string | undefined;
 	let inferredHolder: string | undefined;
+	let inferredOpeningBalance: number | undefined;
 
 	const inputPath = flags.input;
 	if (inputPath) {
@@ -595,9 +610,10 @@ async function cmdInit(flags: Record<string, string>): Promise<void> {
 		}
 
 		if (transactions.length > 0) {
-			const { currency, holderName } = inferCsvDefaults(transactions);
+			const { currency, holderName, openingBalance } = inferCsvDefaults(transactions);
 			inferredCurrency = currency;
 			inferredHolder = holderName;
+			inferredOpeningBalance = openingBalance;
 
 			const detected = detectFormat(csvContent);
 			if (detected) {
@@ -605,6 +621,9 @@ async function cmdInit(flags: Record<string, string>): Promise<void> {
 			}
 			if (inferredCurrency) {
 				process.stderr.write(`  ℹ  Inferred currency: ${inferredCurrency} (from CSV transactions)\n`);
+			}
+			if (inferredOpeningBalance !== undefined) {
+				process.stderr.write(`  ℹ  Inferred opening balance: ${inferredOpeningBalance} (from CSV running balance)\n`);
 			}
 		}
 	}
@@ -644,6 +663,7 @@ async function cmdInit(flags: Record<string, string>): Promise<void> {
 	if (bic) config.bic = bic;
 	if (companyId) config.companyId = companyId;
 	if (description) config.accountDescription = description;
+	if (inferredOpeningBalance !== undefined) config.openingBalance = inferredOpeningBalance;
 
 	const json = JSON.stringify(config, null, 2) + "\n";
 

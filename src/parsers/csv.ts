@@ -178,6 +178,49 @@ export function normaliseIban(raw: string): string | undefined {
 	return cleaned.length > 0 ? cleaned : undefined;
 }
 
+/**
+ * Join raw lines into logical CSV records, merging continuation lines that
+ * fall inside an open quoted field (RFC 4180 multiline support).
+ */
+function joinMultilineRecords(rawLines: string[]): string[] {
+	const records: string[] = [];
+	let current = "";
+	let inQuotes = false;
+
+	for (const line of rawLines) {
+		if (current === "" && line.trim() === "") continue; // skip blank lines between records
+
+		if (current !== "") {
+			current += "\n";
+		}
+		current += line;
+
+		// Count quote parity in the accumulated text to decide if we're still
+		// inside a quoted field.
+		let i = inQuotes ? 0 : 0;
+		for (i = 0; i < line.length; i++) {
+			if (line[i] === '"') {
+				if (inQuotes && line[i + 1] === '"') {
+					i++; // escaped quote, skip
+				} else {
+					inQuotes = !inQuotes;
+				}
+			}
+		}
+
+		if (!inQuotes) {
+			records.push(current);
+			current = "";
+		}
+	}
+
+	if (current !== "") {
+		records.push(current);
+	}
+
+	return records;
+}
+
 export function parseCsv(content: string, options?: ParseCsvOptions): CsvRow[] {
 	// Normalise line endings
 	const rawLines = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
@@ -195,13 +238,17 @@ export function parseCsv(content: string, options?: ParseCsvOptions): CsvRow[] {
 	const delimiter = options?.delimiter ?? detectDelimiter(headerLine);
 	const headers = parseCsvLine(headerLine, delimiter);
 
+	// Join continuation lines for multiline quoted fields (RFC 4180)
+	const dataLines = rawLines.slice(1);
+	const records = joinMultilineRecords(dataLines);
+
 	const rows: CsvRow[] = [];
 
-	for (let lineIdx = 1; lineIdx < rawLines.length; lineIdx++) {
-		const line = rawLines[lineIdx] ?? "";
-		if (line.trim() === "") continue;
+	for (let recIdx = 0; recIdx < records.length; recIdx++) {
+		const record = records[recIdx] ?? "";
+		if (record.trim() === "") continue;
 
-		const values = parseCsvLine(line, delimiter, lineIdx + 1);
+		const values = parseCsvLine(record, delimiter, recIdx + 2);
 		const row: CsvRow = {};
 
 		for (let col = 0; col < headers.length; col++) {
