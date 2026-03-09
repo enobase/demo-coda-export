@@ -20,6 +20,12 @@ export interface CsvInferredDefaults {
 	currency: string | undefined;
 	/** Account holder name inferred from CSV fields, if available */
 	holderName: string | undefined;
+	/**
+	 * Opening balance inferred from a running balance column (e.g. Qonto FR
+	 * "Solde"). Computed as: balance_after_earliest_tx - amount_of_earliest_tx.
+	 * Undefined when no balance data is present.
+	 */
+	openingBalance: number | undefined;
 }
 
 /**
@@ -71,7 +77,23 @@ export function inferCsvDefaults(transactions: BankTransaction[]): CsvInferredDe
 		holderName = undefined;
 	}
 
-	return { currency, holderName };
+	// --- Opening balance: infer from running balance column ---
+	// When transactions carry a post-transaction balance (e.g. Qonto FR "Solde"),
+	// derive the opening balance as:
+	//   balance_after_earliest - amount_of_earliest
+	let openingBalance: number | undefined;
+	const withBalance = transactions.filter((tx) => tx.balance !== undefined);
+	if (withBalance.length > 0) {
+		const earliest = withBalance.reduce(
+			(min, tx) => (tx.date < min.date ? tx : min),
+			withBalance[0],
+		);
+		if (earliest.balance !== undefined) {
+			openingBalance = earliest.balance - earliest.amount;
+		}
+	}
+
+	return { currency, holderName, openingBalance };
 }
 
 /**
