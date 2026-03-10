@@ -7,8 +7,8 @@
  *   - Amount conversion uses Math.round(amount * 1000) to avoid floating-point
  *     drift, then BigInt(). The amount field is always non-negative; sign is
  *     encoded separately as '0' (credit) or '1' (debit).
- *   - Belgian structured communication (OGM/VCS) is auto-detected and formatted
- *     as +++NNN/NNNN/NNNNN+++.
+ *   - Belgian structured communication (OGM/VCS) is auto-detected and encoded
+ *     as '101' + 12 raw digits per the CODA 2.6 spec.
  *   - Communication > 53 chars spills into Record 22 (53 chars) and Record 23
  *     (43 chars).
  *   - Record 22 is emitted when there is communication continuation OR a
@@ -18,7 +18,7 @@
 
 import type { BankTransaction } from "./parsers/types.ts";
 import { validateIban } from "./belgian-banks.ts";
-import { formatDate, serializeAccountInfo } from "./serializer.ts";
+import { formatDate, padNumeric, serializeAccountInfo } from "./serializer.ts";
 import type {
 	AccountInfo,
 	AccountStructure,
@@ -122,6 +122,33 @@ export function detectOgm(value: string): string | null {
 		const digits = digitMatch[1] + digitMatch[2] + digitMatch[3];
 		if (!validateOgmCheckDigit(digits)) return null;
 		return `+++${digitMatch[1]}/${digitMatch[2]}/${digitMatch[3]}+++`;
+	}
+
+	return null;
+}
+
+/**
+ * Extract the 12 raw digits from a Belgian OGM/VCS structured communication.
+ * Returns the raw digits if the value is a valid OGM, or null otherwise.
+ *
+ * Example: "+++269/0211/57996+++" → "269021157996"
+ */
+export function extractOgmDigits(value: string): string | null {
+	if (!value) return null;
+	const trimmed = value.trim();
+
+	const ogmMatch = OGM_PATTERN.exec(trimmed);
+	if (ogmMatch) {
+		const digits = ogmMatch[1] + ogmMatch[2] + ogmMatch[3];
+		if (!validateOgmCheckDigit(digits)) return null;
+		return digits;
+	}
+
+	const digitMatch = OGM_DIGITS_PATTERN.exec(trimmed);
+	if (digitMatch) {
+		const digits = digitMatch[1] + digitMatch[2] + digitMatch[3];
+		if (!validateOgmCheckDigit(digits)) return null;
+		return digits;
 	}
 
 	return null;
@@ -334,11 +361,11 @@ export function splitCommunication(
 	const text = reference ?? description ?? "";
 
 	// Check for Belgian structured communication first
-	const ogm = detectOgm(text);
-	if (ogm) {
+	const ogmDigits = extractOgmDigits(text);
+	if (ogmDigits) {
 		return {
 			type: "1",
-			part1: ogm, // +++NNN/NNNN/NNNNN+++ = 14 chars, padded to 53 by serializer
+			part1: "101" + ogmDigits, // '101' type code + 12 raw digits = 15 chars, padded to 53 by serializer
 			part2: "",
 			part3: "",
 		};
@@ -423,7 +450,7 @@ function buildRecord0(config: CodaConfig, now: Date): Record0Header {
 		bankIdentificationNumber: config.bankId,
 		applicationCode: config.applicationCode ?? "05",
 		isDuplicate: false,
-		fileReference: "",
+		fileReference: formatDate(now).slice(0, 6) + padNumeric(String(config.statementSequence ?? 1), 4),
 		addresseeName: config.accountHolderName,
 		bic: config.bic ?? "",
 		companyIdentificationNumber: config.companyId ?? "",
@@ -555,11 +582,12 @@ export function mapToCoda(transactions: BankTransaction[], config: CodaConfig): 
 		}
 
 		// Record 21
+		const bankRef = `CODA${seqNum.toString().padStart(4, "0")}${txSeq.toString().padStart(13, "0")}`;
 		const rec21: Record21Movement = {
 			recordType: "21",
 			sequenceNumber: txSeq,
 			detailNumber: 0,
-			bankReference: "",
+			bankReference: bankRef,
 			amountSign,
 			amount,
 			entryDate,
@@ -614,12 +642,13 @@ export function mapToCoda(transactions: BankTransaction[], config: CodaConfig): 
 			const feeSeq = nextSeq++;
 			const feeAmount = toMilliCents(tx.fee); // toMilliCents always returns abs value
 			const feeSign: SignCode = "1"; // fees are always debits
+			const feeBankRef = `CODA${seqNum.toString().padStart(4, "0")}${feeSeq.toString().padStart(13, "0")}`;
 
 			const feeRec21: Record21Movement = {
 				recordType: "21",
 				sequenceNumber: feeSeq,
 				detailNumber: 0,
-				bankReference: "",
+				bankReference: feeBankRef,
 				amountSign: feeSign,
 				amount: feeAmount,
 				entryDate,

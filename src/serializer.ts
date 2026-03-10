@@ -312,11 +312,11 @@ export function serializeRecord1(rec: Record1OldBalance): string {
  *   [10:31]   bank reference (21 chars)
  *   [31]      sign of amount ('0' or '1')
  *   [32:47]   amount (15 digits)
- *   [47:53]   entry date DDMMYY
+ *   [47:53]   value date DDMMYY
  *   [53:61]   transaction code (8 digits)
  *   [61]      communication type ('0' or '1')
  *   [62:115]  communication (53 chars)
- *   [115:121] value date DDMMYY
+ *   [115:121] entry date DDMMYY
  *   [121:124] statement sequence number (3 digits)
  *   [124]     globalization code (1 digit)
  *   [125:127] blanks (2)
@@ -330,11 +330,11 @@ export function serializeRecord21(rec: Record21Movement): string {
 		padAlpha(rec.bankReference, 21) + // [10:31]
 		rec.amountSign + // [31]
 		formatAmount(rec.amount) + // [32:47]
-		formatDate(rec.entryDate) + // [47:53]
+		formatDate(rec.valueDate) + // [47:53]
 		formatTransactionCode(rec.transactionCode) + // [53:61]
 		rec.communicationType + // [61]
 		padAlpha(rec.communication, 53) + // [62:115]
-		formatDate(rec.valueDate) + // [115:121]
+		formatDate(rec.entryDate) + // [115:121]
 		padNumeric(rec.statementSequenceNumber.toString(), 3) + // [121:124]
 		padNumeric(rec.globalizationCode.toString(), 1) + // [124]
 		"  " + // [125:127]  reserved
@@ -543,20 +543,20 @@ export function serializeRecord8(rec: Record8NewBalance): string {
  *   [0]       '9'
  *   [1:16]    blanks (15)
  *   [16:22]   record count (6 digits; excludes Record 0 and Record 9)
- *   [22:37]   total debit (15 digits)
- *   [37:52]   total credit (15 digits)
+ *   [22:37]   total debit — sign(1) + amount(14 digits)
+ *   [37:52]   total credit — sign(1) + amount(14 digits)
  *   [52:127]  blanks (75)
- *   [127]     '1' (end-of-file marker)
+ *   [127]     version code ('2')
  */
 export function serializeRecord9(rec: Record9Trailer): string {
 	const line =
 		"9" + // [0]
 		" ".repeat(15) + // [1:16]
 		padNumeric(rec.recordCount.toString(), 6) + // [16:22]
-		formatAmount(rec.totalDebit) + // [22:37]
-		formatAmount(rec.totalCredit) + // [37:52]
+		"0" + padNumeric(rec.totalDebit.toString(), 14) + // [22:37] sign + 14-digit amount
+		"0" + padNumeric(rec.totalCredit.toString(), 14) + // [37:52] sign + 14-digit amount
 		" ".repeat(75) + // [52:127]
-		"1"; // [127]
+		"2"; // [127] version code
 
 	return assertLength(line, "9");
 }

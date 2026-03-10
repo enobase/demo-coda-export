@@ -339,9 +339,10 @@ describe("Edge cases", () => {
 		expect(rec21).toBeDefined();
 		// Communication type at position 61 should be "1"
 		expect(rec21?.[61]).toBe("1");
-		// Communication should contain the OGM reference
+		// Communication should contain '101' + raw OGM digits, not the formatted +++NNN/NNNN/NNNNN+++ string
 		const comm = rec21?.slice(62, 115).trimEnd();
-		expect(comm).toContain("+++090/9337/55493+++");
+		expect(comm).toStartWith("101090933755493");
+		expect(comm).not.toContain("+++");
 
 		const result = validate(coda);
 		expect(result.valid).toBe(true);

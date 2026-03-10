@@ -22,6 +22,7 @@ import {
 	buildCounterpartyAccountRaw,
 	buildTransactionCode,
 	detectOgm,
+	extractOgmDigits,
 	formatOgm,
 	ibanToAccountStructure,
 	mapToCoda,
@@ -391,10 +392,11 @@ describe("formatOgm", () => {
 });
 
 describe("splitCommunication", () => {
-	it("uses OGM as structured communication (type '1')", () => {
+	it("uses OGM as structured communication (type '1') with raw digits", () => {
 		const result = splitCommunication("+++123/4567/89002+++", "Some description");
 		expect(result.type).toBe("1");
-		expect(result.part1).toBe("+++123/4567/89002+++");
+		expect(result.part1).toBe("101123456789002");
+		expect(result.part1).not.toContain("+++");
 		expect(result.part2).toBe("");
 		expect(result.part3).toBe("");
 	});
@@ -767,13 +769,13 @@ describe("mapToCoda → serializeCoda (line length check)", () => {
 		expect(lines[lines.length - 1][0]).toBe("9");
 	});
 
-	it("Record 9 trailer ends with '1' (EOF marker)", () => {
+	it("Record 9 trailer ends with '2' (version code)", () => {
 		const txns: BankTransaction[] = [makeTx()];
 		const stmt = mapToCoda(txns, BASE_CONFIG);
 		const output = serializeCoda(stmt);
 		const lines = output.trimEnd().split("\n");
 		const trailerLine = lines[lines.length - 1];
-		expect(trailerLine[127]).toBe("1");
+		expect(trailerLine[127]).toBe("2");
 	});
 });
 
@@ -788,7 +790,7 @@ describe("Structured OGM communication in records", () => {
 		const rec21 = stmt.records.find((r) => r.recordType === "21");
 		if (rec21?.recordType === "21") {
 			expect(rec21.communicationType).toBe("1");
-			expect(rec21.communication).toBe("+++123/4567/89002+++");
+			expect(rec21.communication).toBe("101123456789002");
 		}
 	});
 
@@ -915,8 +917,8 @@ describe("Full pipeline integration — Revolut Personal", () => {
 
 		// First line = Record 0
 		expect(lines[0][0]).toBe("0");
-		// Last line = Record 9, ends with '1'
-		expect(lines[lines.length - 1][127]).toBe("1");
+		// Last line = Record 9, ends with '2' (version code)
+		expect(lines[lines.length - 1][127]).toBe("2");
 		// All lines = 128 chars
 		for (const line of lines) {
 			expect(line.length).toBe(128);

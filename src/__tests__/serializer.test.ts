@@ -428,7 +428,7 @@ describe("serializeRecord21 (Movement main)", () => {
 		expect(serializeRecord21(rec).slice(32, 47)).toBe("000000000005000");
 	});
 
-	it("encodes entry date at [47:53]", () => {
+	it("encodes value date at [47:53]", () => {
 		expect(serializeRecord21(rec).slice(47, 53)).toBe("111017");
 	});
 
@@ -446,7 +446,7 @@ describe("serializeRecord21 (Movement main)", () => {
 		expect(line.slice(62, 115).length).toBe(53);
 	});
 
-	it("encodes value date at [115:121]", () => {
+	it("encodes entry date at [115:121]", () => {
 		expect(serializeRecord21(rec).slice(115, 121)).toBe("111017");
 	});
 
@@ -810,8 +810,8 @@ describe("serializeRecord9 (Trailer)", () => {
 		expect(line.slice(52, 127)).toBe(" ".repeat(75));
 	});
 
-	it("ends with '1' as end-of-file marker", () => {
-		expect(serializeRecord9(rec)[127]).toBe("1");
+	it("ends with '2' as version code", () => {
+		expect(serializeRecord9(rec)[127]).toBe("2");
 	});
 
 	it("handles zero totals", () => {

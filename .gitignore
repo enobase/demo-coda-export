@@ -40,6 +40,9 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # Python venv (roundtrip test setup)
 .venv/
 
+# Temporary CODA parser test directory
+.tmp-coda-test/
+
 # Generated CODA files (may contain real financial data)
 *.cod
 
