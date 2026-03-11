@@ -46,11 +46,11 @@ against real files.
 
 ---
 
-## Whether real Belgian accounting software would accept our output
+## ~~Whether real Belgian accounting software would accept our output~~ (RESOLVED)
 
-Testing against Odoo Online (with l10n_be_coda) is in progress. The output passes our own
-structural validator, pycoda's `parse()` method, and has been verified against multiple
-independent CODA parsers (php-coda-parser, coda-rs).
+Testing confirmed: output successfully imported into Odoo Online (with l10n_be_coda module). Files were loaded correctly with proper journal entries.
+
+The output also passes structural validator, pycoda's `parse()` method, and has been verified against multiple independent CODA parsers (php-coda-parser, coda-rs).
 
 Not yet confirmed with:
 - Exact Online (Belgium)

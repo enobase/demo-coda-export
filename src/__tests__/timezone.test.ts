@@ -75,7 +75,7 @@ describe("Full pipeline: dates in CODA output match CSV input dates", () => {
 		expect(transactions).toHaveLength(1);
 
 		// Verify the parser produced a UTC-midnight date for 2026-01-15
-		const txDate = transactions[0].date;
+		const txDate = transactions[0]!.date;
 		expect(txDate).toBeInstanceOf(Date);
 		expect((txDate as Date).toISOString()).toMatch(/^2026-01-15T00:00:00/);
 
@@ -87,10 +87,10 @@ describe("Full pipeline: dates in CODA output match CSV input dates", () => {
 		const lines = codaContent.split("\n").filter((l) => l.startsWith("21"));
 		expect(lines.length).toBeGreaterThanOrEqual(1);
 
-		const entryDate = lines[0].slice(47, 53); // DDMMYY
+		const entryDate = lines[0]!.slice(47, 53); // DDMMYY
 		expect(entryDate).toBe("150126");
 
-		const valueDate = lines[0].slice(115, 121); // DDMMYY
+		const valueDate = lines[0]!.slice(115, 121); // DDMMYY
 		expect(valueDate).toBe("150126");
 	});
 
@@ -112,7 +112,7 @@ describe("Full pipeline: dates in CODA output match CSV input dates", () => {
 		const transactions = parseTransactions(csv, "revolut-personal");
 		expect(transactions).toHaveLength(1);
 
-		const txDate = transactions[0].date as Date;
+		const txDate = transactions[0]!.date as Date;
 		expect(txDate.toISOString()).toMatch(/^2026-01-01T00:00:00/);
 
 		const statement = mapToCoda(transactions, config);
@@ -121,7 +121,7 @@ describe("Full pipeline: dates in CODA output match CSV input dates", () => {
 		const lines = codaContent.split("\n").filter((l) => l.startsWith("21"));
 		expect(lines.length).toBeGreaterThanOrEqual(1);
 
-		const entryDate = lines[0].slice(47, 53);
+		const entryDate = lines[0]!.slice(47, 53);
 		expect(entryDate).toBe("010126"); // must not be "311225"
 	});
 });

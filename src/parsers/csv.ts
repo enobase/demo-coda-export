@@ -197,7 +197,7 @@ function joinMultilineRecords(rawLines: string[]): string[] {
 
 		// Count quote parity in the accumulated text to decide if we're still
 		// inside a quoted field.
-		let i = inQuotes ? 0 : 0;
+		let i = 0;
 		for (i = 0; i < line.length; i++) {
 			if (line[i] === '"') {
 				if (inQuotes && line[i + 1] === '"') {

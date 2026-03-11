@@ -91,7 +91,7 @@ describe("validate()", () => {
 	// -----------------------------------------------------------------------
 	it("detects line that is too short", () => {
 		const coda = mutateLines(buildValidCoda(), (lines) => {
-			lines[2] = lines[2].slice(0, 100); // truncate a body line
+			lines[2] = lines[2]!.slice(0, 100); // truncate a body line
 			return lines;
 		});
 		const result = validate(coda);
@@ -117,7 +117,7 @@ describe("validate()", () => {
 	// -----------------------------------------------------------------------
 	it("detects missing header (first line does not start with 0)", () => {
 		const coda = mutateLines(buildValidCoda(), (lines) => {
-			lines[0] = `X${lines[0].slice(1)}`;
+			lines[0] = `X${lines[0]!.slice(1)}`;
 			return lines;
 		});
 		const result = validate(coda);
@@ -132,7 +132,7 @@ describe("validate()", () => {
 	// -----------------------------------------------------------------------
 	it("detects missing trailer (last line does not start with 9)", () => {
 		const coda = mutateLines(buildValidCoda(), (lines) => {
-			const last = lines[lines.length - 1];
+			const last = lines[lines.length - 1]!;
 			lines[lines.length - 1] = `X${last.slice(1)}`;
 			return lines;
 		});
@@ -149,7 +149,7 @@ describe("validate()", () => {
 	it("detects wrong record count in trailer", () => {
 		const coda = mutateLines(buildValidCoda(), (lines) => {
 			// Patch the count field in the trailer (positions 16-22)
-			const trailer = lines[lines.length - 1];
+			const trailer = lines[lines.length - 1]!;
 			const wrong = `${trailer.slice(0, 16)}999999${trailer.slice(22)}`;
 			lines[lines.length - 1] = wrong;
 			return lines;
@@ -164,7 +164,7 @@ describe("validate()", () => {
 	// -----------------------------------------------------------------------
 	it("detects wrong debit total in trailer", () => {
 		const coda = mutateLines(buildValidCoda(), (lines) => {
-			const trailer = lines[lines.length - 1];
+			const trailer = lines[lines.length - 1]!;
 			// Patch debit total (positions 22-37) to an incorrect value
 			const wrong = `${trailer.slice(0, 22)}000000000000999${trailer.slice(37)}`;
 			lines[lines.length - 1] = wrong;
@@ -180,7 +180,7 @@ describe("validate()", () => {
 	// -----------------------------------------------------------------------
 	it("detects wrong credit total in trailer", () => {
 		const coda = mutateLines(buildValidCoda(), (lines) => {
-			const trailer = lines[lines.length - 1];
+			const trailer = lines[lines.length - 1]!;
 			// Patch credit total (positions 37-52)
 			const wrong = `${trailer.slice(0, 37)}000000000000999${trailer.slice(52)}`;
 			lines[lines.length - 1] = wrong;
@@ -198,13 +198,13 @@ describe("validate()", () => {
 		const coda = mutateLines(buildValidCoda(), (lines) => {
 			// Find the Record 21 line and set its continuation flag to "1"
 			for (let i = 0; i < lines.length; i++) {
-				if (lines[i].startsWith("21") && lines[i].length === 128) {
+				if (lines[i]!.startsWith("21") && lines[i]!.length === 128) {
 					// Set continuation flag at position 127 to "1"
-					lines[i] = `${lines[i].slice(0, 127)}1`;
+					lines[i] = `${lines[i]!.slice(0, 127)}1`;
 					// Insert a non-22 line after it (insert a duplicate Record 21)
-					lines.splice(i + 1, 0, lines[i]);
+					lines.splice(i + 1, 0, lines[i]!);
 					// Update the trailer count: +1
-					const trailer = lines[lines.length - 1];
+					const trailer = lines[lines.length - 1]!;
 					const oldCount = Number(trailer.slice(16, 22));
 					const newCount = String(oldCount + 1).padStart(6, "0");
 					lines[lines.length - 1] = `${trailer.slice(0, 16)}${newCount}${trailer.slice(22)}`;
@@ -223,7 +223,7 @@ describe("validate()", () => {
 	// -----------------------------------------------------------------------
 	it("warns when Record 0 version code is not 2", () => {
 		const coda = mutateLines(buildValidCoda(), (lines) => {
-			const header = lines[0];
+			const header = lines[0]!;
 			lines[0] = `${header.slice(0, 127)}1`; // change version code to "1"
 			return lines;
 		});
@@ -242,9 +242,9 @@ describe("validate()", () => {
 	it("detects invalid sign code in Record 21", () => {
 		const coda = mutateLines(buildValidCoda(), (lines) => {
 			for (let i = 0; i < lines.length; i++) {
-				if (lines[i].startsWith("21") && lines[i].length === 128) {
+				if (lines[i]!.startsWith("21") && lines[i]!.length === 128) {
 					// Replace sign at position 31 with an invalid character
-					lines[i] = `${lines[i].slice(0, 31)}X${lines[i].slice(32)}`;
+					lines[i] = `${lines[i]!.slice(0, 31)}X${lines[i]!.slice(32)}`;
 					break;
 				}
 			}
@@ -260,7 +260,7 @@ describe("validate()", () => {
 	// -----------------------------------------------------------------------
 	it("detects missing old balance record (second line not 1)", () => {
 		const coda = mutateLines(buildValidCoda(), (lines) => {
-			lines[1] = `X${lines[1].slice(1)}`;
+			lines[1] = `X${lines[1]!.slice(1)}`;
 			return lines;
 		});
 		const result = validate(coda);
@@ -276,7 +276,7 @@ describe("validate()", () => {
 	it("detects missing new balance record (second-to-last line not 8)", () => {
 		const coda = mutateLines(buildValidCoda(), (lines) => {
 			const idx = lines.length - 2;
-			lines[idx] = `X${lines[idx].slice(1)}`;
+			lines[idx] = `X${lines[idx]!.slice(1)}`;
 			return lines;
 		});
 		const result = validate(coda);
@@ -301,8 +301,8 @@ describe("validate()", () => {
 	it("reports multiple errors in a single pass", () => {
 		const coda = mutateLines(buildValidCoda(), (lines) => {
 			// Wrong header + wrong trailer
-			lines[0] = `X${lines[0].slice(1)}`;
-			const last = lines[lines.length - 1];
+			lines[0] = `X${lines[0]!.slice(1)}`;
+			const last = lines[lines.length - 1]!;
 			lines[lines.length - 1] = `X${last.slice(1)}`;
 			return lines;
 		});
@@ -323,7 +323,7 @@ describe("validate()", () => {
 
 	it("each error has line, message, severity", () => {
 		const coda = mutateLines(buildValidCoda(), (lines) => {
-			lines[0] = `X${lines[0].slice(1)}`;
+			lines[0] = `X${lines[0]!.slice(1)}`;
 			return lines;
 		});
 		const result = validate(coda);
@@ -360,7 +360,7 @@ describe("validate()", () => {
 		const coda = mutateLines(buildValidCoda(), (lines) => {
 			// Corrupt line 3 (index 2)
 			if (lines.length > 2) {
-				lines[2] = lines[2].slice(0, 50);
+				lines[2] = lines[2]!.slice(0, 50);
 			}
 			return lines;
 		});

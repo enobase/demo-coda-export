@@ -108,17 +108,17 @@ describe("Revolut Personal → CODA full pipeline", () => {
 		const lines = codaContent.trimEnd().split("\n");
 		// Revolut personal fixture: 8 COMPLETED transactions, each is a single Record21
 		// So total = 1 + 1 + 8 + 1 + 1 = 12
-		expect(lines[0][0]).toBe("0");
-		expect(lines[1][0]).toBe("1");
-		expect(lines[lines.length - 2][0]).toBe("8");
-		expect(lines[lines.length - 1][0]).toBe("9");
+		expect(lines[0]![0]).toBe("0");
+		expect(lines[1]![0]).toBe("1");
+		expect(lines[lines.length - 2]![0]).toBe("8");
+		expect(lines[lines.length - 1]![0]).toBe("9");
 		expect(lines.length).toBeGreaterThanOrEqual(4 + transactions.length);
 	});
 
 	it("trailer record count matches actual records (excluding 0 and 9)", () => {
 		const { codaContent } = fullPipeline(csv, config, "revolut-personal");
 		const lines = codaContent.trimEnd().split("\n");
-		const trailer = lines[lines.length - 1];
+		const trailer = lines[lines.length - 1]!;
 		const claimedCount = Number(trailer.slice(16, 22));
 		expect(claimedCount).toBe(lines.length - 2);
 	});
@@ -132,7 +132,7 @@ describe("Revolut Personal → CODA full pipeline", () => {
 		const normalize = (content: string) => {
 			const lines = content.trimEnd().split("\n");
 			// Blank out creation date (positions 1-10) in header line
-			lines[0] = `${lines[0][0]}          ${lines[0].slice(11)}`;
+			lines[0] = `${lines[0]![0]}          ${lines[0]!.slice(11)}`;
 			return lines.join("\n");
 		};
 
@@ -187,7 +187,7 @@ describe("Revolut Business → CODA full pipeline", () => {
 	it("debit and credit totals match trailer", () => {
 		const { codaContent } = fullPipeline(csv, config, "revolut-business");
 		const lines = codaContent.trimEnd().split("\n");
-		const trailer = lines[lines.length - 1];
+		const trailer = lines[lines.length - 1]!;
 		const claimedDebit = BigInt(trailer.slice(22, 37));
 		const claimedCredit = BigInt(trailer.slice(37, 52));
 
@@ -252,7 +252,7 @@ describe("Qonto → CODA full pipeline", () => {
 
 		const normalize = (content: string) => {
 			const lines = content.trimEnd().split("\n");
-			lines[0] = `${lines[0][0]}          ${lines[0].slice(11)}`;
+			lines[0] = `${lines[0]![0]}          ${lines[0]!.slice(11)}`;
 			return lines.join("\n");
 		};
 
@@ -364,7 +364,7 @@ describe("Edge cases", () => {
 
 		// Check trailer totals
 		const lines = coda.trimEnd().split("\n");
-		const trailer = lines[lines.length - 1];
+		const trailer = lines[lines.length - 1]!;
 		const claimedDebit = BigInt(trailer.slice(22, 37));
 		const claimedCredit = BigInt(trailer.slice(37, 52));
 		// 200 + 100 = 300 debits → 300000 milli-cents
@@ -434,7 +434,7 @@ describe("Edge cases", () => {
 		// Should have exactly: header, old balance, new balance, trailer = 4 lines
 		expect(lines.length).toBe(4);
 		// Trailer record count should be 2 (record 1 + record 8)
-		const trailer = lines[lines.length - 1];
+		const trailer = lines[lines.length - 1]!;
 		expect(Number(trailer.slice(16, 22))).toBe(2);
 	});
 });
@@ -449,7 +449,7 @@ describe("Format auto-detection", () => {
 		expect(() => {
 			const txns = parseTransactions(csv);
 			expect(txns.length).toBeGreaterThan(0);
-			expect(txns[0].source).toBe("revolut-personal");
+			expect(txns[0]!.source).toBe("revolut-personal");
 		}).not.toThrow();
 	});
 
@@ -458,7 +458,7 @@ describe("Format auto-detection", () => {
 		expect(() => {
 			const txns = parseTransactions(csv);
 			expect(txns.length).toBeGreaterThan(0);
-			expect(txns[0].source).toBe("revolut-business");
+			expect(txns[0]!.source).toBe("revolut-business");
 		}).not.toThrow();
 	});
 
@@ -467,7 +467,7 @@ describe("Format auto-detection", () => {
 		expect(() => {
 			const txns = parseTransactions(csv);
 			expect(txns.length).toBeGreaterThan(0);
-			expect(txns[0].source).toBe("qonto");
+			expect(txns[0]!.source).toBe("qonto");
 		}).not.toThrow();
 	});
 
@@ -476,7 +476,7 @@ describe("Format auto-detection", () => {
 		expect(() => {
 			const txns = parseTransactions(csv);
 			expect(txns.length).toBeGreaterThan(0);
-			expect(txns[0].source).toBe("n26");
+			expect(txns[0]!.source).toBe("n26");
 		}).not.toThrow();
 	});
 
@@ -485,7 +485,7 @@ describe("Format auto-detection", () => {
 		expect(() => {
 			const txns = parseTransactions(csv);
 			expect(txns.length).toBeGreaterThan(0);
-			expect(txns[0].source).toBe("wise");
+			expect(txns[0]!.source).toBe("wise");
 		}).not.toThrow();
 	});
 });
@@ -539,7 +539,7 @@ describe("N26 → CODA full pipeline", () => {
 	it("trailer record count matches actual records", () => {
 		const { codaContent } = fullPipeline(csv, config, "n26");
 		const lines = codaContent.trimEnd().split("\n");
-		const trailer = lines[lines.length - 1];
+		const trailer = lines[lines.length - 1]!;
 		const claimedCount = Number(trailer.slice(16, 22));
 		expect(claimedCount).toBe(lines.length - 2);
 	});
@@ -547,7 +547,7 @@ describe("N26 → CODA full pipeline", () => {
 	it("debit and credit totals match trailer", () => {
 		const { codaContent } = fullPipeline(csv, config, "n26");
 		const lines = codaContent.trimEnd().split("\n");
-		const trailer = lines[lines.length - 1];
+		const trailer = lines[lines.length - 1]!;
 		const claimedDebit = BigInt(trailer.slice(22, 37));
 		const claimedCredit = BigInt(trailer.slice(37, 52));
 
@@ -620,7 +620,7 @@ describe("Wise → CODA full pipeline", () => {
 	it("trailer record count matches actual records", () => {
 		const { codaContent } = fullPipeline(csv, config, "wise");
 		const lines = codaContent.trimEnd().split("\n");
-		const trailer = lines[lines.length - 1];
+		const trailer = lines[lines.length - 1]!;
 		const claimedCount = Number(trailer.slice(16, 22));
 		expect(claimedCount).toBe(lines.length - 2);
 	});
@@ -628,7 +628,7 @@ describe("Wise → CODA full pipeline", () => {
 	it("debit and credit totals match trailer", () => {
 		const { codaContent } = fullPipeline(csv, config, "wise");
 		const lines = codaContent.trimEnd().split("\n");
-		const trailer = lines[lines.length - 1];
+		const trailer = lines[lines.length - 1]!;
 		const claimedDebit = BigInt(trailer.slice(22, 37));
 		const claimedCredit = BigInt(trailer.slice(37, 52));
 

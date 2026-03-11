@@ -88,7 +88,7 @@ export function validate(content: string): ValidationResult {
 	// -----------------------------------------------------------------------
 	for (let i = 0; i < lines.length; i++) {
 		const lineNo = i + 1;
-		const line = lines[i];
+		const line = lines[i]!;
 		if (line.length !== CODA_LINE_LENGTH) {
 			errors.push(err(lineNo, `Line length is ${line.length}, expected ${CODA_LINE_LENGTH}`));
 		}
@@ -97,14 +97,14 @@ export function validate(content: string): ValidationResult {
 	// -----------------------------------------------------------------------
 	// Check 2: first line starts with "0"
 	// -----------------------------------------------------------------------
-	if (!lines[0].startsWith("0")) {
-		errors.push(err(1, `First line must start with "0" (header record), got "${lines[0][0]}"`));
+	if (!lines[0]!.startsWith("0")) {
+		errors.push(err(1, `First line must start with "0" (header record), got "${lines[0]![0]}"`));
 	}
 
 	// -----------------------------------------------------------------------
 	// Check 3: last line starts with "9"
 	// -----------------------------------------------------------------------
-	const lastLine = lines[lines.length - 1];
+	const lastLine = lines[lines.length - 1]!;
 	const lastLineNo = lines.length;
 	if (!lastLine.startsWith("9")) {
 		errors.push(
@@ -120,9 +120,9 @@ export function validate(content: string): ValidationResult {
 	// -----------------------------------------------------------------------
 	// Check 4: second line starts with "1"
 	// -----------------------------------------------------------------------
-	if (!lines[1].startsWith("1")) {
+	if (!lines[1]!.startsWith("1")) {
 		errors.push(
-			err(2, `Second line must start with "1" (old balance record), got "${lines[1][0]}"`),
+			err(2, `Second line must start with "1" (old balance record), got "${lines[1]![0]}"`),
 		);
 	}
 
@@ -130,7 +130,7 @@ export function validate(content: string): ValidationResult {
 	// Check 5: second-to-last line starts with "8"
 	// -----------------------------------------------------------------------
 	if (lines.length >= 3) {
-		const secondToLast = lines[lines.length - 2];
+		const secondToLast = lines[lines.length - 2]!;
 		const secondToLastLineNo = lines.length - 1;
 		if (!secondToLast.startsWith("8")) {
 			errors.push(
@@ -154,11 +154,11 @@ export function validate(content: string): ValidationResult {
 
 	for (let i = 0; i < lines.length; i++) {
 		const lineNo = i + 1;
-		const line = lines[i];
+		const line = lines[i]!;
 		if (line.length < 2) continue; // already flagged by check 1
 
 		const token2 = line.slice(0, 2); // first 2 chars
-		const token1 = line[0]; // first char
+		const token1 = line[0]!; // first char
 
 		// We only validate the "body" lines (everything except 0, 1, 8, 9)
 		if (i === 0) {
@@ -187,7 +187,7 @@ export function validate(content: string): ValidationResult {
 	// -----------------------------------------------------------------------
 	// Checks 7, 8, 9: trailer record counts and totals
 	// -----------------------------------------------------------------------
-	const trailerLine = lines[lines.length - 1];
+	const trailerLine = lines[lines.length - 1]!;
 	if (trailerLine.length === CODA_LINE_LENGTH) {
 		// Record count: positions [16:22] (6 digits)
 		const countStr = trailerLine.slice(16, 22);
@@ -218,12 +218,12 @@ export function validate(content: string): ValidationResult {
 		let totalCredit = 0n;
 
 		for (let i = 0; i < lines.length; i++) {
-			const line = lines[i];
+			const line = lines[i]!;
 			if (line.length !== CODA_LINE_LENGTH) continue;
 			if (!line.startsWith("21")) continue;
 
 			// sign at position [31], amount at [32:47]
-			const signChar = line[31];
+			const signChar = line[31]!;
 			const amountStr = line.slice(32, 47);
 			const amount = parseAmount(amountStr);
 			if (amount === null) continue;
@@ -260,14 +260,14 @@ export function validate(content: string): ValidationResult {
 	//   22 with hasContinuation=1 must be followed by 23
 	// -----------------------------------------------------------------------
 	for (let i = 0; i < lines.length - 1; i++) {
-		const line = lines[i];
+		const line = lines[i]!;
 		if (line.length !== CODA_LINE_LENGTH) continue;
 
 		const lineNo = i + 1;
-		const nextLine = lines[i + 1];
+		const nextLine = lines[i + 1]!;
 
 		if (line.startsWith("21")) {
-			const continuationFlag = line[127];
+			const continuationFlag = line[127]!;
 			if (continuationFlag === "1") {
 				if (!nextLine.startsWith("22")) {
 					errors.push(
@@ -279,7 +279,7 @@ export function validate(content: string): ValidationResult {
 				}
 			}
 		} else if (line.startsWith("22")) {
-			const continuationFlag = line[127];
+			const continuationFlag = line[127]!;
 			if (continuationFlag === "1") {
 				if (!nextLine.startsWith("23")) {
 					errors.push(
@@ -296,9 +296,9 @@ export function validate(content: string): ValidationResult {
 	// -----------------------------------------------------------------------
 	// Check 11: version code at position 127 of Record 0 should be "2"
 	// -----------------------------------------------------------------------
-	const headerLine = lines[0];
+	const headerLine = lines[0]!;
 	if (headerLine.length === CODA_LINE_LENGTH) {
-		const versionCode = headerLine[127];
+		const versionCode = headerLine[127]!;
 		if (versionCode !== "2") {
 			errors.push(
 				warn(1, `Record 0 version code at position 127 should be "2", got "${versionCode}"`),
@@ -310,12 +310,12 @@ export function validate(content: string): ValidationResult {
 	// Check 12: sign codes in Record 21 should be "0" or "1"
 	// -----------------------------------------------------------------------
 	for (let i = 0; i < lines.length; i++) {
-		const line = lines[i];
+		const line = lines[i]!;
 		if (line.length !== CODA_LINE_LENGTH) continue;
 		if (!line.startsWith("21")) continue;
 
 		const lineNo = i + 1;
-		const signCode = line[31]; // position [31]
+		const signCode = line[31]!; // position [31]
 		if (signCode !== "0" && signCode !== "1") {
 			errors.push(
 				err(lineNo, `Record 21 sign code at position 31 must be "0" or "1", got "${signCode}"`),

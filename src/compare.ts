@@ -47,7 +47,7 @@ const CODA_LINE_LENGTH = 128;
  */
 function recordType(line: string): string {
 	if (line.length < 2) return line[0] ?? "?";
-	const firstChar = line[0];
+	const firstChar = line[0]!;
 	// Multi-character record types start with 2, 3, or 4
 	if (firstChar === "2" || firstChar === "3") {
 		return line.slice(0, 2);
@@ -106,14 +106,14 @@ export function analyzeFile(content: string, rawBytes?: Uint8Array): CodaFileSta
 	let versionCode: string | null = null;
 	const headerLine = lines.find((l) => l[0] === "0" && l.length === CODA_LINE_LENGTH);
 	if (headerLine) {
-		versionCode = headerLine[127];
+		versionCode = headerLine[127] ?? null;
 	}
 
 	// Account structure code: position [1] of Record 1
 	let accountStructureCode: string | null = null;
 	const balanceLine = lines.find((l) => l[0] === "1" && l.length === CODA_LINE_LENGTH);
 	if (balanceLine) {
-		accountStructureCode = balanceLine[1];
+		accountStructureCode = balanceLine[1] ?? null;
 	}
 
 	// Count record types
@@ -154,7 +154,7 @@ export function analyzeFile(content: string, rawBytes?: Uint8Array): CodaFileSta
 		let i = 0;
 		let saw21 = false;
 		while (i < lines.length) {
-			const line = lines[i];
+			const line = lines[i]!;
 			if (line.startsWith("21") && line.length === CODA_LINE_LENGTH) {
 				saw21 = true;
 				// Look ahead

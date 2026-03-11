@@ -112,16 +112,16 @@ export function detectOgm(value: string): string | null {
 
 	const ogmMatch = OGM_PATTERN.exec(trimmed);
 	if (ogmMatch) {
-		const digits = ogmMatch[1] + ogmMatch[2] + ogmMatch[3];
+		const digits = ogmMatch[1]! + ogmMatch[2]! + ogmMatch[3]!;
 		if (!validateOgmCheckDigit(digits)) return null;
-		return `+++${ogmMatch[1]}/${ogmMatch[2]}/${ogmMatch[3]}+++`;
+		return `+++${ogmMatch[1]!}/${ogmMatch[2]!}/${ogmMatch[3]!}+++`;
 	}
 
 	const digitMatch = OGM_DIGITS_PATTERN.exec(trimmed);
 	if (digitMatch) {
-		const digits = digitMatch[1] + digitMatch[2] + digitMatch[3];
+		const digits = digitMatch[1]! + digitMatch[2]! + digitMatch[3]!;
 		if (!validateOgmCheckDigit(digits)) return null;
-		return `+++${digitMatch[1]}/${digitMatch[2]}/${digitMatch[3]}+++`;
+		return `+++${digitMatch[1]!}/${digitMatch[2]!}/${digitMatch[3]!}+++`;
 	}
 
 	return null;
@@ -139,14 +139,14 @@ export function extractOgmDigits(value: string): string | null {
 
 	const ogmMatch = OGM_PATTERN.exec(trimmed);
 	if (ogmMatch) {
-		const digits = ogmMatch[1] + ogmMatch[2] + ogmMatch[3];
+		const digits = ogmMatch[1]! + ogmMatch[2]! + ogmMatch[3]!;
 		if (!validateOgmCheckDigit(digits)) return null;
 		return digits;
 	}
 
 	const digitMatch = OGM_DIGITS_PATTERN.exec(trimmed);
 	if (digitMatch) {
-		const digits = digitMatch[1] + digitMatch[2] + digitMatch[3];
+		const digits = digitMatch[1]! + digitMatch[2]! + digitMatch[3]!;
 		if (!validateOgmCheckDigit(digits)) return null;
 		return digits;
 	}
@@ -555,8 +555,7 @@ export function mapToCoda(transactions: BankTransaction[], config: CodaConfig): 
 	// We maintain a running counter rather than using the loop index directly.
 	let nextSeq = 1;
 
-	for (let i = 0; i < transactions.length; i++) {
-		const tx = transactions[i];
+	for (const tx of transactions) {
 		const txSeq = nextSeq++;
 
 		const amountSign = toSignCode(tx.amount);

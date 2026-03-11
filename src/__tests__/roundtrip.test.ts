@@ -171,23 +171,23 @@ describe.skipIf(!PYTHON_AVAILABLE || !PYCODA_AVAILABLE)("pycoda round-trip", () 
 	});
 
 	it("account number matches", () => {
-		const stmt = getResult().statements[0];
+		const stmt = getResult().statements[0]!;
 		expect(stmt.accNumber).toBe("BE68539007547034");
 	});
 
 	it("currency matches", () => {
-		const stmt = getResult().statements[0];
+		const stmt = getResult().statements[0]!;
 		expect(stmt.currency).toBe("EUR");
 	});
 
 	it("old balance matches", () => {
-		const stmt = getResult().statements[0];
+		const stmt = getResult().statements[0]!;
 		// Opening balance is 2000.00 (credit)
 		expect(stmt.oldBalance).toBeCloseTo(2000.0, 2);
 	});
 
 	it("new balance matches", () => {
-		const stmt = getResult().statements[0];
+		const stmt = getResult().statements[0]!;
 		// credits: 2000 + 1500 = 3500
 		// debits:  42.50 + 500 + 65.30 + 200 + 1.50 (fee) + 89.99 + 850 = 1749.29
 		// new balance = 2000 + 3500 - 1749.29 = 3750.71
@@ -195,7 +195,7 @@ describe.skipIf(!PYTHON_AVAILABLE || !PYCODA_AVAILABLE)("pycoda round-trip", () 
 	});
 
 	it("transaction count matches (8 main + 1 fee record = 9 Record21 lines)", () => {
-		const stmt = getResult().statements[0];
+		const stmt = getResult().statements[0]!;
 		// Revolut Personal fixture has 8 COMPLETED transactions, one of which
 		// (EXCHANGE) carries a non-zero fee (-1.50).  mapToCoda emits a
 		// separate Record 21 for the fee, so pycoda sees 9 movements total.
@@ -203,7 +203,7 @@ describe.skipIf(!PYTHON_AVAILABLE || !PYCODA_AVAILABLE)("pycoda round-trip", () 
 	});
 
 	it("individual transaction amounts match (signed)", () => {
-		const stmt = getResult().statements[0];
+		const stmt = getResult().statements[0]!;
 		const amounts = stmt.transactions.map((t) => t.amount);
 
 		// Expected amounts in emission order: main transactions first (PENDING
@@ -212,12 +212,12 @@ describe.skipIf(!PYTHON_AVAILABLE || !PYCODA_AVAILABLE)("pycoda round-trip", () 
 
 		expect(amounts).toHaveLength(expected.length);
 		for (let i = 0; i < expected.length; i++) {
-			expect(amounts[i]).toBeCloseTo(expected[i], 2);
+			expect(amounts[i]).toBeCloseTo(expected[i]!, 2);
 		}
 	});
 
 	it("transaction dates are present and in YYYY-MM-DD format", () => {
-		const stmt = getResult().statements[0];
+		const stmt = getResult().statements[0]!;
 		const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 		for (const tx of stmt.transactions) {
 			expect(tx.date).not.toBeNull();
@@ -226,9 +226,9 @@ describe.skipIf(!PYTHON_AVAILABLE || !PYCODA_AVAILABLE)("pycoda round-trip", () 
 	});
 
 	it("first transaction communication matches", () => {
-		const stmt = getResult().statements[0];
+		const stmt = getResult().statements[0]!;
 		// Revolut Personal fixture first COMPLETED row: 'Delhaize'
-		expect(stmt.transactions[0].communication).toContain("Delhaize");
+		expect(stmt.transactions[0]!.communication).toContain("Delhaize");
 	});
 });
 
