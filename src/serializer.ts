@@ -550,8 +550,10 @@ export function serializeRecord9(rec: Record9Trailer): string {
 		"9" + // [0]
 		" ".repeat(15) + // [1:16]
 		padNumeric(rec.recordCount.toString(), 6) + // [16:22]
-		"0" + padNumeric(rec.totalDebit.toString(), 14) + // [22:37] sign + 14-digit amount
-		"0" + padNumeric(rec.totalCredit.toString(), 14) + // [37:52] sign + 14-digit amount
+		"0" +
+		padNumeric(rec.totalDebit.toString(), 14) + // [22:37] sign + 14-digit amount
+		"0" +
+		padNumeric(rec.totalCredit.toString(), 14) + // [37:52] sign + 14-digit amount
 		" ".repeat(75) + // [52:127]
 		"2"; // [127] version code
 

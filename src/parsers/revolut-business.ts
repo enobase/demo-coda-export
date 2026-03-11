@@ -11,7 +11,7 @@
  * Auto-detection key: presence of "Beneficiary IBAN" in the header.
  */
 
-import { parseCsv, parseAmount, validateColumns, normaliseIban } from "./csv.ts";
+import { normaliseIban, parseAmount, parseCsv, validateColumns } from "./csv.ts";
 import type { BankTransaction, InputFormat, InputParser } from "./types.ts";
 
 /**

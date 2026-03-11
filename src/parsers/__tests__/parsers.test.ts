@@ -9,7 +9,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { detectDelimiter, parseCsv, parseCsvLine, parseAmount, validateColumns } from "../csv.ts";
+import { detectDelimiter, parseAmount, parseCsv, parseCsvLine, validateColumns } from "../csv.ts";
 import { detectFormat, parseTransactions } from "../index.ts";
 import { n26Parser } from "../n26.ts";
 import { qontoParser } from "../qonto.ts";

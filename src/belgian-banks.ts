@@ -27,7 +27,10 @@ export interface BankEntry {
 export const BELGIAN_BANKS: ReadonlyMap<string, BankEntry> = new Map<string, BankEntry>([
 	["539", { name: "KBC", bic: "KREDBEBB", aliases: ["kbc", "kredietbank"] }],
 	["310", { name: "ING", bic: "BBRUBEBB", aliases: ["ing", "ing belgium"] }],
-	["001", { name: "BNP Paribas Fortis", bic: "GEBABEBB", aliases: ["bnp", "fortis", "bnp paribas"] }],
+	[
+		"001",
+		{ name: "BNP Paribas Fortis", bic: "GEBABEBB", aliases: ["bnp", "fortis", "bnp paribas"] },
+	],
 	["068", { name: "Belfius", bic: "GKCCBEBB", aliases: ["belfius", "dexia"] }],
 	["683", { name: "Keytrade", bic: "NICABEBB", aliases: ["keytrade", "keytrade bank"] }],
 	["034", { name: "Argenta", bic: "ARSPBE22", aliases: ["argenta"] }],
@@ -79,8 +82,22 @@ export function extractBankIdFromIban(iban: string): string | null {
  */
 
 const IBAN_LENGTHS: Record<string, number> = {
-	BE: 16, DE: 22, FR: 27, NL: 18, LU: 20, AT: 20, ES: 24, IT: 27,
-	PT: 25, GB: 22, IE: 22, CH: 21, DK: 18, SE: 24, NO: 15, FI: 18,
+	BE: 16,
+	DE: 22,
+	FR: 27,
+	NL: 18,
+	LU: 20,
+	AT: 20,
+	ES: 24,
+	IT: 27,
+	PT: 25,
+	GB: 22,
+	IE: 22,
+	CH: 21,
+	DK: 18,
+	SE: 24,
+	NO: 15,
+	FI: 18,
 };
 
 export function validateIban(iban: string): boolean {

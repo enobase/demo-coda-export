@@ -9,7 +9,7 @@
  * Detection: header contains "Partner Iban" AND "Account Name" AND "Amount (EUR)"
  */
 
-import { parseCsv, parseAmount, validateColumns, normaliseIban } from "./csv.ts";
+import { normaliseIban, parseAmount, parseCsv, validateColumns } from "./csv.ts";
 import type { BankTransaction, InputFormat, InputParser } from "./types.ts";
 
 /** Signature columns that identify this format */

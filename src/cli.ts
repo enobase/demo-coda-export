@@ -439,7 +439,9 @@ async function cmdConvert(flags: Record<string, string>): Promise<void> {
 			const mm = String(inferred.getUTCMonth() + 1).padStart(2, "0");
 			const dd = String(inferred.getUTCDate()).padStart(2, "0");
 			flags["opening-date"] = `${yyyy}-${mm}-${dd}`;
-			process.stderr.write(`  ✓ Opening date: ${flags["opening-date"]} (day before earliest transaction)\n`);
+			process.stderr.write(
+				`  ✓ Opening date: ${flags["opening-date"]} (day before earliest transaction)\n`,
+			);
 		}
 	}
 
@@ -448,7 +450,9 @@ async function cmdConvert(flags: Record<string, string>): Promise<void> {
 		const { openingBalance } = inferCsvDefaults(transactions);
 		if (openingBalance !== undefined) {
 			flags["opening-balance"] = String(openingBalance);
-			process.stderr.write(`  ✓ Opening balance: ${openingBalance} (inferred from CSV running balance)\n`);
+			process.stderr.write(
+				`  ✓ Opening balance: ${openingBalance} (inferred from CSV running balance)\n`,
+			);
 		}
 	}
 
@@ -508,7 +512,8 @@ async function cmdConvert(flags: Record<string, string>): Promise<void> {
 	}
 
 	// Determine output path
-	const outputPath = flags.output ?? (process.stdout.isTTY ? inferOutputPath(inputPath) : undefined);
+	const outputPath =
+		flags.output ?? (process.stdout.isTTY ? inferOutputPath(inputPath) : undefined);
 
 	// Write output encoded as Latin-1 (ISO-8859-1), matching real CODA files.
 	if (outputPath) {
@@ -662,10 +667,14 @@ async function cmdInit(flags: Record<string, string>): Promise<void> {
 				process.stderr.write(`  ℹ  Detected format: ${detectedFormat}\n`);
 			}
 			if (inferredCurrency) {
-				process.stderr.write(`  ℹ  Inferred currency: ${inferredCurrency} (from CSV transactions)\n`);
+				process.stderr.write(
+					`  ℹ  Inferred currency: ${inferredCurrency} (from CSV transactions)\n`,
+				);
 			}
 			if (inferredOpeningBalance !== undefined) {
-				process.stderr.write(`  ℹ  Inferred opening balance: ${inferredOpeningBalance} (from CSV running balance)\n`);
+				process.stderr.write(
+					`  ℹ  Inferred opening balance: ${inferredOpeningBalance} (from CSV running balance)\n`,
+				);
 			}
 		}
 	}
@@ -729,7 +738,9 @@ async function cmdInit(flags: Record<string, string>): Promise<void> {
 
 	await Bun.write(configPath, json);
 	process.stderr.write(`\nConfig saved to ${configPath}\n`);
-	process.stderr.write(`\nUsage:\n  coda-export convert --input transactions.csv --opening-balance 1234.56\n`);
+	process.stderr.write(
+		`\nUsage:\n  coda-export convert --input transactions.csv --opening-balance 1234.56\n`,
+	);
 }
 
 // ---------------------------------------------------------------------------

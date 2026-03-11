@@ -16,8 +16,8 @@
  *   - Record 23 is emitted when there is a counterparty IBAN or name.
  */
 
-import type { BankTransaction } from "./parsers/types.ts";
 import { validateIban } from "./belgian-banks.ts";
+import type { BankTransaction } from "./parsers/types.ts";
 import { formatDate, padNumeric, serializeAccountInfo } from "./serializer.ts";
 import type {
 	AccountInfo,
@@ -450,7 +450,8 @@ function buildRecord0(config: CodaConfig, now: Date): Record0Header {
 		bankIdentificationNumber: config.bankId,
 		applicationCode: config.applicationCode ?? "05",
 		isDuplicate: false,
-		fileReference: formatDate(now).slice(0, 6) + padNumeric(String(config.statementSequence ?? 1), 4),
+		fileReference:
+			formatDate(now).slice(0, 6) + padNumeric(String(config.statementSequence ?? 1), 4),
 		addresseeName: config.accountHolderName,
 		bic: config.bic ?? "",
 		companyIdentificationNumber: config.companyId ?? "",

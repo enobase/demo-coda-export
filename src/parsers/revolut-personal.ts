@@ -8,7 +8,7 @@
  * Only COMPLETED rows are imported.
  */
 
-import { parseCsv, parseAmount, validateColumns } from "./csv.ts";
+import { parseAmount, parseCsv, validateColumns } from "./csv.ts";
 import type { BankTransaction, InputFormat, InputParser } from "./types.ts";
 
 /** Signature columns that identify this format */
