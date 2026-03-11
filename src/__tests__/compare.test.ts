@@ -204,7 +204,7 @@ describe("formatReport()", () => {
 		const matches = lineLine?.match(/\d+/g);
 		expect(matches).toBeDefined();
 		if (matches && matches.length >= 2) {
-			expect(matches[0]).toBe(matches[1]);
+			expect(matches[0]!).toBe(matches[1]!);
 		}
 	});
 

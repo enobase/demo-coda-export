@@ -55,7 +55,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
 	// Skip the interpreter and script path if present (bun /path/to/cli.ts ...)
 	// We treat the first non-flag token as the command
 	while (i < argv.length) {
-		const arg = argv[i];
+		const arg = argv[i]!;
 
 		if (arg === "--help" || arg === "-h") {
 			flags.help = "true";
@@ -72,8 +72,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
 		if (arg.startsWith("--")) {
 			const key = arg.slice(2);
 			// Peek: if next token exists and is not a flag, treat as value
-			if (i + 1 < argv.length && !argv[i + 1].startsWith("--")) {
-				flags[key] = argv[i + 1];
+			if (i + 1 < argv.length && !argv[i + 1]!.startsWith("--")) {
+				flags[key] = argv[i + 1]!;
 				i += 2;
 			} else {
 				// Boolean flag
@@ -592,7 +592,7 @@ function cmdCompare(flags: Record<string, string>): void {
 	let refContent: string;
 	try {
 		refBytes = new Uint8Array(readFileSync(referencePath));
-		refContent = new TextDecoder("latin1").decode(refBytes);
+		refContent = new TextDecoder("windows-1252").decode(refBytes);
 	} catch (e) {
 		process.stderr.write(
 			`Error: Cannot read reference file "${referencePath}": ${(e as NodeJS.ErrnoException).message}\n`,
@@ -604,7 +604,7 @@ function cmdCompare(flags: Record<string, string>): void {
 	let genContent: string;
 	try {
 		genBytes = new Uint8Array(readFileSync(generatedPath));
-		genContent = new TextDecoder("latin1").decode(genBytes);
+		genContent = new TextDecoder("windows-1252").decode(genBytes);
 	} catch (e) {
 		process.stderr.write(
 			`Error: Cannot read generated file "${generatedPath}": ${(e as NodeJS.ErrnoException).message}\n`,

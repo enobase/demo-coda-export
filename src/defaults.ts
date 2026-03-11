@@ -39,7 +39,7 @@ export interface CsvInferredDefaults {
  */
 export function inferCsvDefaults(transactions: BankTransaction[]): CsvInferredDefaults {
 	if (transactions.length === 0) {
-		return { currency: undefined, holderName: undefined };
+		return { currency: undefined, holderName: undefined, openingBalance: undefined };
 	}
 
 	// --- Currency: pick the most common one ---
@@ -84,9 +84,10 @@ export function inferCsvDefaults(transactions: BankTransaction[]): CsvInferredDe
 	let openingBalance: number | undefined;
 	const withBalance = transactions.filter((tx) => tx.balance !== undefined);
 	if (withBalance.length > 0) {
+		const first = withBalance[0]!;
 		const earliest = withBalance.reduce(
 			(min, tx) => (tx.date < min.date ? tx : min),
-			withBalance[0],
+			first,
 		);
 		if (earliest.balance !== undefined) {
 			openingBalance = earliest.balance - earliest.amount;
@@ -128,7 +129,7 @@ export function inferOpeningDate(transactions: { date: Date }[]): Date | null {
 
 	const earliest = transactions.reduce(
 		(min, tx) => (tx.date < min ? tx.date : min),
-		transactions[0].date,
+		transactions[0]!.date,
 	);
 
 	const result = new Date(earliest);

@@ -22,7 +22,6 @@ import {
 	buildCounterpartyAccountRaw,
 	buildTransactionCode,
 	detectOgm,
-	extractOgmDigits,
 	formatOgm,
 	ibanToAccountStructure,
 	mapToCoda,
@@ -271,7 +270,9 @@ describe("buildTransactionCode — Revolut Personal", () => {
 	});
 
 	it("maps undefined rawType to default family 01, operation 01", () => {
-		const tc = buildTransactionCode(makeTx({ rawType: undefined, amount: -10 }));
+		const txNoType = { ...makeTx({ amount: -10 }) };
+		delete txNoType.rawType;
+		const tc = buildTransactionCode(txNoType);
 		expect(tc.family).toBe("01");
 		expect(tc.operation).toBe("01");
 	});
@@ -566,9 +567,9 @@ describe("mapToCoda — multiple transactions", () => {
 		const stmt = mapToCoda(txns, BASE_CONFIG);
 		const rec21s = stmt.records.filter((r) => r.recordType === "21");
 		expect(rec21s).toHaveLength(3);
-		if (rec21s[0].recordType === "21") expect(rec21s[0].sequenceNumber).toBe(1);
-		if (rec21s[1].recordType === "21") expect(rec21s[1].sequenceNumber).toBe(2);
-		if (rec21s[2].recordType === "21") expect(rec21s[2].sequenceNumber).toBe(3);
+		if (rec21s[0]!.recordType === "21") expect(rec21s[0]!.sequenceNumber).toBe(1);
+		if (rec21s[1]!.recordType === "21") expect(rec21s[1]!.sequenceNumber).toBe(2);
+		if (rec21s[2]!.recordType === "21") expect(rec21s[2]!.sequenceNumber).toBe(3);
 	});
 
 	it("emits Record 23 when counterparty IBAN is present", () => {
@@ -594,7 +595,7 @@ describe("mapToCoda — multiple transactions", () => {
 
 	it("does not emit Record 22/23 when no counterparty data and short communication", () => {
 		const txns: BankTransaction[] = [
-			makeTx({ description: "Short description", counterpartyIban: undefined }),
+			makeTx({ description: "Short description" }),
 		];
 		const stmt = mapToCoda(txns, BASE_CONFIG);
 		const rec22 = stmt.records.find((r) => r.recordType === "22");
@@ -765,8 +766,8 @@ describe("mapToCoda → serializeCoda (line length check)", () => {
 		const stmt = mapToCoda(txns, BASE_CONFIG);
 		const output = serializeCoda(stmt);
 		const lines = output.trimEnd().split("\n");
-		expect(lines[0][0]).toBe("0");
-		expect(lines[lines.length - 1][0]).toBe("9");
+		expect(lines[0]![0]).toBe("0");
+		expect(lines[lines.length - 1]![0]).toBe("9");
 	});
 
 	it("Record 9 trailer ends with '2' (version code)", () => {
@@ -774,7 +775,7 @@ describe("mapToCoda → serializeCoda (line length check)", () => {
 		const stmt = mapToCoda(txns, BASE_CONFIG);
 		const output = serializeCoda(stmt);
 		const lines = output.trimEnd().split("\n");
-		const trailerLine = lines[lines.length - 1];
+		const trailerLine = lines[lines.length - 1]!;
 		expect(trailerLine[127]).toBe("2");
 	});
 });
@@ -916,9 +917,9 @@ describe("Full pipeline integration — Revolut Personal", () => {
 		const lines = reread.trimEnd().split("\n");
 
 		// First line = Record 0
-		expect(lines[0][0]).toBe("0");
+		expect(lines[0]![0]).toBe("0");
 		// Last line = Record 9, ends with '2' (version code)
-		expect(lines[lines.length - 1][127]).toBe("2");
+		expect(lines[lines.length - 1]![127]).toBe("2");
 		// All lines = 128 chars
 		for (const line of lines) {
 			expect(line.length).toBe(128);
@@ -1033,7 +1034,7 @@ describe("Edge cases", () => {
 
 	it("hasContinuation on Record 21 is false when no Record 22/23 follow", () => {
 		const txns: BankTransaction[] = [
-			makeTx({ description: "Short", counterpartyIban: undefined, counterpartyName: undefined }),
+			makeTx({ description: "Short" }),
 		];
 		const stmt = mapToCoda(txns, BASE_CONFIG);
 		const rec21 = stmt.records.find((r) => r.recordType === "21");
@@ -1093,7 +1094,7 @@ describe("Fee handling — fee generates separate debit Record 21", () => {
 	});
 
 	it("transaction with fee of undefined emits no extra record", () => {
-		const txns: BankTransaction[] = [makeTx({ amount: -42.5, fee: undefined })];
+		const txns: BankTransaction[] = [makeTx({ amount: -42.5 })];
 		const stmt = mapToCoda(txns, BASE_CONFIG);
 		const rec21s = stmt.records.filter((r) => r.recordType === "21");
 		expect(rec21s).toHaveLength(1);
