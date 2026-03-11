@@ -19,7 +19,7 @@
  * "Date de la valeur (UTC)" (FR) in the header.
  */
 
-import { parseCsv, parseAmount, validateColumns, normaliseIban } from "./csv.ts";
+import { normaliseIban, parseAmount, parseCsv, validateColumns } from "./csv.ts";
 import type { BankTransaction, InputFormat, InputParser } from "./types.ts";
 
 const ACCEPTED_STATUSES_EN = new Set(["settled", "executed"]);
@@ -34,12 +34,7 @@ const REQUIRED_COLUMNS_EN = [
 ];
 
 /** Required columns for the French export */
-const REQUIRED_COLUMNS_FR = [
-	"Statut",
-	"Date de la valeur (UTC)",
-	"Montant total (TTC)",
-	"Devise",
-];
+const REQUIRED_COLUMNS_FR = ["Statut", "Date de la valeur (UTC)", "Montant total (TTC)", "Devise"];
 
 /**
  * Parse an English Qonto date string.
@@ -75,7 +70,10 @@ function parseDateFr(raw: string): Date {
  */
 function parseFrAmount(raw: string, options?: { required?: boolean }): number {
 	// Replace non-breaking and regular spaces (thousands separator) then swap comma for dot
-	const normalised = raw.trim().replace(/[\s\u00a0]/g, "").replace(",", ".");
+	const normalised = raw
+		.trim()
+		.replace(/[\s\u00a0]/g, "")
+		.replace(",", ".");
 	return parseAmount(normalised, options);
 }
 
@@ -132,7 +130,11 @@ function parseEnglish(content: string): BankTransaction[] {
 function parseFrench(content: string): BankTransaction[] {
 	const rows = parseCsv(content);
 	if (rows.length > 0) {
-		validateColumns(Object.keys(rows[0] as Record<string, string>), REQUIRED_COLUMNS_FR, "Qonto FR");
+		validateColumns(
+			Object.keys(rows[0] as Record<string, string>),
+			REQUIRED_COLUMNS_FR,
+			"Qonto FR",
+		);
 	}
 	const transactions: BankTransaction[] = [];
 
@@ -208,11 +210,12 @@ export const qontoParser: InputParser = {
 	},
 
 	parse(content: string): BankTransaction[] {
-		const firstLine = content
-			.replace(/\r\n/g, "\n")
-			.replace(/\r/g, "\n")
-			.split("\n")
-			.find((line) => line.trim() !== "") ?? "";
+		const firstLine =
+			content
+				.replace(/\r\n/g, "\n")
+				.replace(/\r/g, "\n")
+				.split("\n")
+				.find((line) => line.trim() !== "") ?? "";
 
 		if (firstLine.includes("Date de la valeur (UTC)")) {
 			return parseFrench(content);

@@ -85,10 +85,7 @@ export function inferCsvDefaults(transactions: BankTransaction[]): CsvInferredDe
 	const withBalance = transactions.filter((tx) => tx.balance !== undefined);
 	if (withBalance.length > 0) {
 		const first = withBalance[0]!;
-		const earliest = withBalance.reduce(
-			(min, tx) => (tx.date < min.date ? tx : min),
-			first,
-		);
+		const earliest = withBalance.reduce((min, tx) => (tx.date < min.date ? tx : min), first);
 		if (earliest.balance !== undefined) {
 			openingBalance = earliest.balance - earliest.amount;
 		}

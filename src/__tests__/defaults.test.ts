@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from "bun:test";
-import { inferOpeningDate, inferOutputPath, inferCsvDefaults } from "../defaults.ts";
+import { inferCsvDefaults, inferOpeningDate, inferOutputPath } from "../defaults.ts";
 import type { BankTransaction } from "../parsers/index.ts";
 
 // ---------------------------------------------------------------------------
@@ -162,9 +162,7 @@ describe("inferCsvDefaults()", () => {
 	});
 
 	it("handles transactions from n26 source", () => {
-		const txs = [
-			makeTx({ currency: "EUR", source: "n26" }),
-		];
+		const txs = [makeTx({ currency: "EUR", source: "n26" })];
 		const result = inferCsvDefaults(txs);
 		expect(result.currency).toBe("EUR");
 		// N26 does not expose a reliable holder name

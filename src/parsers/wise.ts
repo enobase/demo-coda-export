@@ -10,7 +10,7 @@
  * Detection: header contains "TransferWise ID"
  */
 
-import { parseCsv, parseAmount, validateColumns, normaliseIban } from "./csv.ts";
+import { normaliseIban, parseAmount, parseCsv, validateColumns } from "./csv.ts";
 import type { BankTransaction, InputFormat, InputParser } from "./types.ts";
 
 /** Columns that must be present for the parser to operate correctly */

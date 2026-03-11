@@ -298,7 +298,7 @@ describe("validateIban", () => {
 	});
 
 	it("rejects an IBAN with wrong length for country", () => {
-		expect(validateIban("BE6853900754703")).toBe(false);  // 15 chars, should be 16
+		expect(validateIban("BE6853900754703")).toBe(false); // 15 chars, should be 16
 	});
 
 	it("rejects an empty string", () => {

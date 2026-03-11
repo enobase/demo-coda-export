@@ -205,11 +205,18 @@ export function validate(content: string): ValidationResult {
 			);
 		}
 
-		// Debit total: positions [22:37]
+		// Debit total: positions [22:37] — sign byte at [22] + 14-digit amount at [23:37].
+		// Assumption: we read all 15 chars as a single digit string. This works because
+		// this tool always writes sign "0" (totals are non-negative absolute sums), so the
+		// sign byte acts as a leading zero and the 15-char string satisfies /^\d{15}$/.
+		// A third-party file with sign "1" at [22] would still match \d{15} but the
+		// resulting bigint would be inflated by 10^14, causing a false mismatch error.
+		// Tightening this (parse sign + 14-digit amount separately) is left for a future
+		// pass if we ever need to validate files from other CODA writers.
 		const claimedDebitStr = trailerLine.slice(22, 37);
 		const claimedDebit = parseAmount(claimedDebitStr);
 
-		// Credit total: positions [37:52]
+		// Credit total: positions [37:52] — same sign-byte assumption as above.
 		const claimedCreditStr = trailerLine.slice(37, 52);
 		const claimedCredit = parseAmount(claimedCreditStr);
 

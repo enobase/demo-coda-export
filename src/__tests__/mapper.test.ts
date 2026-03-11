@@ -594,9 +594,7 @@ describe("mapToCoda — multiple transactions", () => {
 	});
 
 	it("does not emit Record 22/23 when no counterparty data and short communication", () => {
-		const txns: BankTransaction[] = [
-			makeTx({ description: "Short description" }),
-		];
+		const txns: BankTransaction[] = [makeTx({ description: "Short description" })];
 		const stmt = mapToCoda(txns, BASE_CONFIG);
 		const rec22 = stmt.records.find((r) => r.recordType === "22");
 		const rec23 = stmt.records.find((r) => r.recordType === "23");
@@ -1033,9 +1031,7 @@ describe("Edge cases", () => {
 	});
 
 	it("hasContinuation on Record 21 is false when no Record 22/23 follow", () => {
-		const txns: BankTransaction[] = [
-			makeTx({ description: "Short" }),
-		];
+		const txns: BankTransaction[] = [makeTx({ description: "Short" })];
 		const stmt = mapToCoda(txns, BASE_CONFIG);
 		const rec21 = stmt.records.find((r) => r.recordType === "21");
 		if (rec21?.recordType === "21") {

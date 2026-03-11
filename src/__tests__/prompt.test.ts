@@ -42,12 +42,10 @@ describe("logInfo()", () => {
 
 	it("writes to stderr", () => {
 		const writes: string[] = [];
-		const spy = spyOn(process.stderr, "write").mockImplementation(
-			(chunk: string | Uint8Array) => {
-				writes.push(typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk));
-				return true;
-			},
-		);
+		const spy = spyOn(process.stderr, "write").mockImplementation((chunk: string | Uint8Array) => {
+			writes.push(typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk));
+			return true;
+		});
 
 		logInfo("hello world");
 
@@ -60,12 +58,10 @@ describe("logInfo()", () => {
 
 	it("includes the info indicator in output", () => {
 		const writes: string[] = [];
-		const spy = spyOn(process.stderr, "write").mockImplementation(
-			(chunk: string | Uint8Array) => {
-				writes.push(typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk));
-				return true;
-			},
-		);
+		const spy = spyOn(process.stderr, "write").mockImplementation((chunk: string | Uint8Array) => {
+			writes.push(typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk));
+			return true;
+		});
 
 		logInfo("detecting format");
 
@@ -79,12 +75,10 @@ describe("logInfo()", () => {
 
 	it("ends output with a newline", () => {
 		const writes: string[] = [];
-		const spy = spyOn(process.stderr, "write").mockImplementation(
-			(chunk: string | Uint8Array) => {
-				writes.push(typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk));
-				return true;
-			},
-		);
+		const spy = spyOn(process.stderr, "write").mockImplementation((chunk: string | Uint8Array) => {
+			writes.push(typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk));
+			return true;
+		});
 
 		logInfo("newline check");
 
@@ -106,12 +100,10 @@ describe("logDerived()", () => {
 
 	it("writes to stderr", () => {
 		const writes: string[] = [];
-		const spy = spyOn(process.stderr, "write").mockImplementation(
-			(chunk: string | Uint8Array) => {
-				writes.push(typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk));
-				return true;
-			},
-		);
+		const spy = spyOn(process.stderr, "write").mockImplementation((chunk: string | Uint8Array) => {
+			writes.push(typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk));
+			return true;
+		});
 
 		logDerived("Bank ID", "539");
 
@@ -122,12 +114,10 @@ describe("logDerived()", () => {
 
 	it("includes label and value in output", () => {
 		const writes: string[] = [];
-		const spy = spyOn(process.stderr, "write").mockImplementation(
-			(chunk: string | Uint8Array) => {
-				writes.push(typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk));
-				return true;
-			},
-		);
+		const spy = spyOn(process.stderr, "write").mockImplementation((chunk: string | Uint8Array) => {
+			writes.push(typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk));
+			return true;
+		});
 
 		logDerived("Bank ID", "539");
 
@@ -140,12 +130,10 @@ describe("logDerived()", () => {
 
 	it("includes the checkmark symbol", () => {
 		const writes: string[] = [];
-		const spy = spyOn(process.stderr, "write").mockImplementation(
-			(chunk: string | Uint8Array) => {
-				writes.push(typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk));
-				return true;
-			},
-		);
+		const spy = spyOn(process.stderr, "write").mockImplementation((chunk: string | Uint8Array) => {
+			writes.push(typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk));
+			return true;
+		});
 
 		logDerived("Account", "BE68539007547034");
 
@@ -157,12 +145,10 @@ describe("logDerived()", () => {
 
 	it("mentions 'derived' in output", () => {
 		const writes: string[] = [];
-		const spy = spyOn(process.stderr, "write").mockImplementation(
-			(chunk: string | Uint8Array) => {
-				writes.push(typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk));
-				return true;
-			},
-		);
+		const spy = spyOn(process.stderr, "write").mockImplementation((chunk: string | Uint8Array) => {
+			writes.push(typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk));
+			return true;
+		});
 
 		logDerived("Bank ID", "539");
 
@@ -174,12 +160,10 @@ describe("logDerived()", () => {
 
 	it("ends output with a newline", () => {
 		const writes: string[] = [];
-		const spy = spyOn(process.stderr, "write").mockImplementation(
-			(chunk: string | Uint8Array) => {
-				writes.push(typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk));
-				return true;
-			},
-		);
+		const spy = spyOn(process.stderr, "write").mockImplementation((chunk: string | Uint8Array) => {
+			writes.push(typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk));
+			return true;
+		});
 
 		logDerived("Bank ID", "539");
 
