@@ -85,7 +85,7 @@ describe("parseArgs()", () => {
 describe("loadConfigFile()", () => {
 	const TMP = join(tmpdir(), `coda-cli-test-${process.pid}`);
 
-	it("loads a valid JSON config file", () => {
+	it("loads a valid JSON config file", async () => {
 		mkdirSync(TMP, { recursive: true });
 		const path = join(TMP, "config.json");
 		const configObj = {
@@ -97,23 +97,23 @@ describe("loadConfigFile()", () => {
 			openingBalanceDate: "2026-01-01",
 		};
 		writeFileSync(path, JSON.stringify(configObj));
-		const result = loadConfigFile(path);
+		const result = await loadConfigFile(path);
 		expect(result.bankId).toBe("539");
 		expect(result.accountIban).toBe("BE68539007547034");
 		expect(result.openingBalance).toBe(1000.0);
 	});
 
-	it("throws on non-existent file", () => {
-		expect(() => loadConfigFile("/nonexistent/path/config.json")).toThrow(
+	it("throws on non-existent file", async () => {
+		await expect(loadConfigFile("/nonexistent/path/config.json")).rejects.toThrow(
 			/Cannot read config file/,
 		);
 	});
 
-	it("throws on invalid JSON", () => {
+	it("throws on invalid JSON", async () => {
 		mkdirSync(TMP, { recursive: true });
 		const path = join(TMP, "bad-config.json");
 		writeFileSync(path, "{ not valid json }");
-		expect(() => loadConfigFile(path)).toThrow(/not valid JSON/);
+		await expect(loadConfigFile(path)).rejects.toThrow(/not valid JSON/);
 	});
 });
 

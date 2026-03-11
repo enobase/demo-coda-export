@@ -17,7 +17,6 @@
  *   coda-export --help
  */
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { extractBankIdFromIban, lookupBic, lookupNeobankBic } from "./belgian-banks.ts";
@@ -155,10 +154,10 @@ interface ConfigFileShape {
  * Load a JSON config file and return the raw object.
  * Throws a descriptive error on parse failure.
  */
-export function loadConfigFile(path: string): ConfigFileShape {
+export async function loadConfigFile(path: string): Promise<ConfigFileShape> {
 	let raw: string;
 	try {
-		raw = readFileSync(path, "utf-8");
+		raw = await Bun.file(path).text();
 	} catch (e) {
 		throw new Error(`Cannot read config file "${path}": ${(e as NodeJS.ErrnoException).message}`);
 	}
@@ -387,18 +386,18 @@ async function cmdConvert(flags: Record<string, string>): Promise<void> {
 	// Load config file if explicitly provided
 	let configFile: ConfigFileShape | undefined;
 	if (flags.config) {
-		configFile = loadConfigFile(flags.config);
+		configFile = await loadConfigFile(flags.config);
 	}
 
 	// Auto-discover config file if not explicitly provided
 	if (!flags.config) {
 		const localConfig = "coda-export.json";
 		const globalConfig = join(homedir(), ".coda-export.json");
-		if (existsSync(localConfig)) {
-			configFile = loadConfigFile(localConfig);
+		if (await Bun.file(localConfig).exists()) {
+			configFile = await loadConfigFile(localConfig);
 			process.stderr.write(`Loaded config from ${localConfig}\n`);
-		} else if (existsSync(globalConfig)) {
-			configFile = loadConfigFile(globalConfig);
+		} else if (await Bun.file(globalConfig).exists()) {
+			configFile = await loadConfigFile(globalConfig);
 			process.stderr.write(`Loaded config from ${globalConfig}\n`);
 		}
 	}
@@ -412,7 +411,7 @@ async function cmdConvert(flags: Record<string, string>): Promise<void> {
 
 	let csvContent: string;
 	try {
-		csvContent = readFileSync(inputPath, "utf-8");
+		csvContent = await Bun.file(inputPath).text();
 	} catch (e) {
 		process.stderr.write(
 			`Error: Cannot read input file "${inputPath}": ${(e as NodeJS.ErrnoException).message}\n`,
@@ -514,7 +513,7 @@ async function cmdConvert(flags: Record<string, string>): Promise<void> {
 	// Write output encoded as Latin-1 (ISO-8859-1), matching real CODA files.
 	if (outputPath) {
 		try {
-			writeFileSync(outputPath, encodeLatin1(codaContent));
+			await Bun.write(outputPath, encodeLatin1(codaContent));
 			process.stderr.write(`Written to ${outputPath}\n`);
 		} catch (e) {
 			process.stderr.write(
@@ -528,7 +527,7 @@ async function cmdConvert(flags: Record<string, string>): Promise<void> {
 	}
 }
 
-function cmdValidate(flags: Record<string, string>): void {
+async function cmdValidate(flags: Record<string, string>): Promise<void> {
 	if (flags.help === "true") {
 		process.stdout.write(HELP_VALIDATE);
 		return;
@@ -542,7 +541,7 @@ function cmdValidate(flags: Record<string, string>): void {
 
 	let content: string;
 	try {
-		content = readFileSync(inputPath, "utf-8");
+		content = await Bun.file(inputPath).text();
 	} catch (e) {
 		process.stderr.write(
 			`Error: Cannot read file "${inputPath}": ${(e as NodeJS.ErrnoException).message}\n`,
@@ -570,7 +569,7 @@ function cmdValidate(flags: Record<string, string>): void {
 	}
 }
 
-function cmdCompare(flags: Record<string, string>): void {
+async function cmdCompare(flags: Record<string, string>): Promise<void> {
 	if (flags.help === "true") {
 		process.stdout.write(HELP_COMPARE);
 		return;
@@ -591,7 +590,7 @@ function cmdCompare(flags: Record<string, string>): void {
 	let refBytes: Uint8Array;
 	let refContent: string;
 	try {
-		refBytes = new Uint8Array(readFileSync(referencePath));
+		refBytes = await Bun.file(referencePath).bytes();
 		refContent = new TextDecoder("windows-1252").decode(refBytes);
 	} catch (e) {
 		process.stderr.write(
@@ -603,7 +602,7 @@ function cmdCompare(flags: Record<string, string>): void {
 	let genBytes: Uint8Array;
 	let genContent: string;
 	try {
-		genBytes = new Uint8Array(readFileSync(generatedPath));
+		genBytes = await Bun.file(generatedPath).bytes();
 		genContent = new TextDecoder("windows-1252").decode(genBytes);
 	} catch (e) {
 		process.stderr.write(
@@ -634,7 +633,7 @@ async function cmdInit(flags: Record<string, string>): Promise<void> {
 	if (inputPath) {
 		let csvContent: string;
 		try {
-			csvContent = readFileSync(inputPath, "utf-8");
+			csvContent = await Bun.file(inputPath).text();
 		} catch (e) {
 			process.stderr.write(
 				`Error: Cannot read input file "${inputPath}": ${(e as NodeJS.ErrnoException).message}\n`,
@@ -728,7 +727,7 @@ async function cmdInit(flags: Record<string, string>): Promise<void> {
 
 	const json = JSON.stringify(config, null, 2) + "\n";
 
-	writeFileSync(configPath, json);
+	await Bun.write(configPath, json);
 	process.stderr.write(`\nConfig saved to ${configPath}\n`);
 	process.stderr.write(`\nUsage:\n  coda-export convert --input transactions.csv --opening-balance 1234.56\n`);
 }
@@ -742,7 +741,7 @@ export async function main(argv: string[]): Promise<void> {
 
 	// Handle --version before anything else
 	if (flags.version === "true") {
-		const pkgJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8"));
+		const pkgJson = JSON.parse(await Bun.file(new URL("../package.json", import.meta.url)).text());
 		process.stdout.write(`${pkgJson.version}\n`);
 		return;
 	}
@@ -764,10 +763,10 @@ export async function main(argv: string[]): Promise<void> {
 			await cmdConvert(flags);
 			break;
 		case "validate":
-			cmdValidate(flags);
+			await cmdValidate(flags);
 			break;
 		case "compare":
-			cmdCompare(flags);
+			await cmdCompare(flags);
 			break;
 		case "init":
 			await cmdInit(flags);
