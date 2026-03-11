@@ -8,20 +8,11 @@ bank CODA files or production accounting software.
 
 ## CODA specification ambiguities
 
-### Record 0 positions [1:5] vs [5:11] — DDMM vs 0000
+### ~~Record 0 positions [1:5] vs [5:11] — DDMM vs 0000~~ (RESOLVED)
 
-Record 0 contains the creation date twice: at positions `[1:5]` (DDMM, 4 chars) and `[5:11]`
-(full DDMMYY, 6 chars). The Febelfin CODA 2.6 spec places the creation date (DDMM) at positions
-[1:5]; we follow this interpretation and write the date digits there.
-
-However, pycoda's `is_valid_coda()` header-validation regex requires `0000` at positions [1:5].
-This means pycoda's validator rejects our output as invalid, even though pycoda's own `parse()`
-method handles the file correctly. It is unknown whether Belgian banks ever write `0000` at
-[1:5] (treating it as a numeric file sequence or leaving it blank), or whether all banks write
-DDMM as specified.
-
-The round-trip tests bypass `is_valid_coda()` and call `parse()` directly. Our interpretation
-may be wrong for some software.
+**Resolved:** All real bank-generated CODA files use `0000` at positions [1:5], not DDMM. We now
+write `0000` to match real-world files. This also fixes compatibility with pycoda's
+`is_valid_coda()` validator and other accounting software that checks these positions.
 
 ### Record 9 record count — what counts?
 
@@ -57,16 +48,15 @@ against real files.
 
 ## Whether real Belgian accounting software would accept our output
 
-We have no confirmation that the files produced by this tool can be successfully imported into:
+Testing against Odoo Online (with l10n_be_coda) is in progress. The output passes our own
+structural validator, pycoda's `parse()` method, and has been verified against multiple
+independent CODA parsers (php-coda-parser, coda-rs).
 
+Not yet confirmed with:
 - Exact Online (Belgium)
 - Yuki
 - BOB50 / Sage BOB
 - Isabel Connect
-- Any other Belgian accounting or bank reconciliation package
-
-The output passes our own structural validator and pycoda's `parse()` method, but neither can
-catch systematic interpretation errors in field positions or transaction code assignments.
 
 ---
 

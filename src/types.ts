@@ -105,7 +105,7 @@ export interface AccountInfo {
  *
  * Positions (0-indexed):
  *   [0]       = "0" (record type)
- *   [1:5]     = creation date first 4 chars (DDMM) — rarely used separately; [5:11] is the canonical date
+ *   [1:5]     = zeros ('0000') — reserved/file sequence (real bank files always use 0000)
  *   [5:11]    = creation date DDMMYY
  *   [11:14]   = bank identification number (3 chars)
  *   [14:16]   = application code (2 chars, usually "05")

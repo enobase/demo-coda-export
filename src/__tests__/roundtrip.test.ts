@@ -9,11 +9,8 @@
  *   - pycoda is not installed in the active Python environment.
  *
  * pycoda compatibility note:
- *   pycoda's is_valid_coda() regex expects positions 1-4 of the header to be
- *   zeros. The Febelfin CODA 2.6 spec places the creation date (DDMM) at
- *   positions [1:5], so our serializer correctly fills those positions with
- *   date digits. pycoda's roundtrip-verify.py script bypasses the regex
- *   validation and calls parse() directly, which handles our output correctly.
+ *   Our serializer now writes '0000' at positions [1:5] of Record 0, matching
+ *   real bank-generated CODA files and pycoda's is_valid_coda() expectation.
  */
 
 import { describe, expect, it } from "bun:test";
