@@ -116,6 +116,18 @@ export function validateIban(iban: string): boolean {
 // ---------------------------------------------------------------------------
 
 /**
+ * Map of neobank source format → canonical BIC.
+ * Used when the IBAN is non-Belgian and cannot be looked up via BELGIAN_BANKS.
+ */
+export const NEOBANK_BICS: ReadonlyMap<string, string> = new Map([
+	["qonto", "QNTOFRP1"],
+	["revolut-personal", "REVOLT21"],
+	["revolut-business", "REVOLT21"],
+	["n26", "NTSBDEB1"],
+	["wise", "TRWIBEB1"],
+]);
+
+/**
  * Look up the BIC for a given 3-digit bank identification code.
  *
  * Returns null if the bank code is not found in the registry.
@@ -123,6 +135,15 @@ export function validateIban(iban: string): boolean {
 export function lookupBic(bankId: string): string | null {
 	const entry = BELGIAN_BANKS.get(bankId);
 	return entry ? entry.bic : null;
+}
+
+/**
+ * Look up the BIC for a neobank source format (e.g. "qonto", "revolut-personal").
+ *
+ * Returns null if the source is not a known neobank.
+ */
+export function lookupNeobankBic(source: string): string | null {
+	return NEOBANK_BICS.get(source) ?? null;
 }
 
 // ---------------------------------------------------------------------------

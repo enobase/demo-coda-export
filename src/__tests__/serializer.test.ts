@@ -235,9 +235,9 @@ describe("serializeRecord0 (Header)", () => {
 		expect(serializeRecord0(dup)[16]).toBe("D");
 	});
 
-	it("encodes creation date at positions [1:5] (DDMM) and [5:11] (DDMMYY)", () => {
+	it("encodes zeros at positions [1:5] and creation date at [5:11] (DDMMYY)", () => {
 		const line = serializeRecord0(rec);
-		expect(line.slice(1, 5)).toBe("1110"); // DDMM
+		expect(line.slice(1, 5)).toBe("0000"); // always zeros (matching real bank files)
 		expect(line.slice(5, 11)).toBe("111017"); // DDMMYY
 	});
 

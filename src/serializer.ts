@@ -150,7 +150,7 @@ function assertLength(line: string, recordType: string): string {
  *
  * Layout (128 chars):
  *   [0]       '0'
- *   [1:5]     first 4 chars of creation date (DDMM) — same as [5:9] of creationDate
+ *   [1:5]     zeros ('0000') — reserved/file sequence (real bank files always use 0000)
  *   [5:11]    creation date DDMMYY
  *   [11:14]   bank identification number (3 chars)
  *   [14:16]   application code (2 chars)
@@ -169,14 +169,11 @@ function assertLength(line: string, recordType: string): string {
  */
 export function serializeRecord0(rec: Record0Header): string {
 	const date = formatDate(rec.creationDate);
-	// Positions [1:5] = DDMM (first 4 chars of date), [5:11] = full DDMMYY
-	const dateDDMM = date.slice(0, 4); // 4 chars
-	const dateFull = date; // 6 chars
 
 	const line =
 		"0" + // [0]       record type
-		dateDDMM + // [1:5]    DDMM
-		dateFull + // [5:11]   DDMMYY
+		"0000" + // [1:5]    zeros (reserved/file sequence; real bank files always use 0000)
+		date + // [5:11]   DDMMYY
 		padNumeric(rec.bankIdentificationNumber, 3) + // [11:14]
 		padAlpha(rec.applicationCode, 2) + // [14:16]
 		(rec.isDuplicate ? "D" : " ") + // [16]

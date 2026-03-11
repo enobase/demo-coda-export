@@ -206,7 +206,7 @@ describe("buildCodaConfig()", () => {
 		};
 		const config = buildCodaConfig(flags);
 		expect(config.bic).toBe("BBRUBEBB   ");
-		expect(config.companyId).toBe("BE0123456789");
+		expect(config.companyId).toBe("00123456789"); // BE prefix stripped, formatted as 0 + 10 digits
 		expect(config.accountDescription).toBe("Current account");
 	});
 

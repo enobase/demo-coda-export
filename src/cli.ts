@@ -20,17 +20,17 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { extractBankIdFromIban, lookupBic, lookupNeobankBic } from "./belgian-banks.ts";
 import { analyzeFile, formatReport } from "./compare.ts";
+import { inferCsvDefaults, inferOpeningDate, inferOutputPath } from "./defaults.ts";
 import { encodeLatin1 } from "./encoding.ts";
 import type { CodaConfig } from "./mapper.ts";
 import { mapToCoda, validateConfig } from "./mapper.ts";
 import type { InputFormat } from "./parsers/index.ts";
 import { detectFormat, parseTransactions } from "./parsers/index.ts";
+import { isTTY, logDerived, prompt as promptUser } from "./prompt.ts";
 import { serializeCoda } from "./serializer.ts";
 import { validate } from "./validator.ts";
-import { extractBankIdFromIban, lookupBic } from "./belgian-banks.ts";
-import { inferOutputPath, inferOpeningDate, inferCsvDefaults } from "./defaults.ts";
-import { prompt as promptUser, isTTY, logDerived } from "./prompt.ts";
 
 // ---------------------------------------------------------------------------
 // Arg parsing
@@ -90,6 +90,47 @@ export function parseArgs(argv: string[]): ParsedArgs {
 	const command = positional[0] ?? null;
 
 	return { command, flags, positional };
+}
+
+// ---------------------------------------------------------------------------
+// Company ID formatting
+// ---------------------------------------------------------------------------
+
+/**
+ * Format a company identification number for the CODA Record 0 [71:82] field.
+ *
+ * The CODA spec requires: '0' + 10-digit Belgian enterprise number = 11 chars.
+ * Accepts various input formats:
+ *   - "BE0123456789" (VAT number with BE prefix)
+ *   - "0123.456.789" (enterprise number with dots)
+ *   - "0123456789"   (raw 10 digits)
+ *   - ""             (empty → returns empty string)
+ *
+ * Returns the 11-char formatted string, or empty string if input is empty.
+ */
+export function formatCompanyId(raw: string): string {
+	if (!raw || raw.trim() === "") return "";
+
+	// Strip "BE" prefix (case-insensitive), dots, spaces, dashes
+	let digits = raw.trim().toUpperCase();
+	if (digits.startsWith("BE")) digits = digits.slice(2);
+	digits = digits.replace(/[\s.\-/]/g, "");
+
+	// Should be 10 digits now
+	if (!/^\d{10}$/.test(digits)) {
+		// If 9 digits, prepend 0
+		if (/^\d{9}$/.test(digits)) {
+			digits = `0${digits}`;
+		} else {
+			process.stderr.write(
+				`Warning: Company ID "${raw}" does not look like a Belgian enterprise number (expected 10 digits). Using as-is.\n`,
+			);
+			return digits.slice(0, 11).padStart(11, "0");
+		}
+	}
+
+	// CODA format: '0' + 10-digit enterprise number
+	return `0${digits}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -167,7 +208,8 @@ export function buildCodaConfig(
 	const accountHolderName = flags["account-holder"] ?? configFile?.accountHolderName ?? "";
 	const accountDescription = flags["account-description"] ?? configFile?.accountDescription;
 	const applicationCode = flags["application-code"] ?? configFile?.applicationCode;
-	const companyId = flags["company-id"] ?? configFile?.companyId;
+	const companyIdRaw = flags["company-id"] ?? configFile?.companyId;
+	const companyId = companyIdRaw ? formatCompanyId(companyIdRaw) : undefined;
 	const statementSequenceRaw =
 		flags["statement-sequence"] ?? configFile?.statementSequence?.toString();
 	const statementSequence = statementSequenceRaw ? Number(statementSequenceRaw) : undefined;
@@ -586,6 +628,7 @@ async function cmdInit(flags: Record<string, string>): Promise<void> {
 	let inferredCurrency: string | undefined;
 	let inferredHolder: string | undefined;
 	let inferredOpeningBalance: number | undefined;
+	let detectedFormat: string | undefined;
 
 	const inputPath = flags.input;
 	if (inputPath) {
@@ -615,9 +658,9 @@ async function cmdInit(flags: Record<string, string>): Promise<void> {
 			inferredHolder = holderName;
 			inferredOpeningBalance = openingBalance;
 
-			const detected = detectFormat(csvContent);
-			if (detected) {
-				process.stderr.write(`  ℹ  Detected format: ${detected}\n`);
+			detectedFormat = detectFormat(csvContent) ?? undefined;
+			if (detectedFormat) {
+				process.stderr.write(`  ℹ  Detected format: ${detectedFormat}\n`);
 			}
 			if (inferredCurrency) {
 				process.stderr.write(`  ℹ  Inferred currency: ${inferredCurrency} (from CSV transactions)\n`);
@@ -641,17 +684,35 @@ async function cmdInit(flags: Record<string, string>): Promise<void> {
 
 	// Auto-derive bank-id and BIC
 	const bankId = extractBankIdFromIban(normalizedIban);
-	const bic = bankId ? lookupBic(bankId) : null;
+	// Try Belgian bank lookup first, then neobank format lookup
+	let bic = bankId ? lookupBic(bankId) : null;
+	if (!bic && detectedFormat) {
+		bic = lookupNeobankBic(detectedFormat);
+	}
 
 	if (bankId) logDerived("Bank ID", bankId);
-	if (bic) logDerived("BIC", bic);
+	if (bic) {
+		const source = bankId && lookupBic(bankId) ? "IBAN" : "detected format";
+		process.stderr.write(`  ✓ BIC: ${bic} (derived from ${source})\n`);
+	}
 
 	// Pre-fill holder name with CSV-inferred value if available
 	const holder = await promptUser("Account holder name (max 26 chars)", inferredHolder);
 	// Pre-fill currency with CSV-inferred value, falling back to EUR
 	const currency = await promptUser("Account currency", inferredCurrency ?? "EUR");
-	const companyId = await promptUser("Company ID / enterprise number (optional, press Enter to skip)");
+	// If no BIC was auto-derived, prompt for it
+	let bicFinal = bic;
+	if (!bicFinal) {
+		const bicInput = await promptUser("Bank BIC/SWIFT (e.g. KREDBEBB, optional)");
+		if (bicInput) bicFinal = bicInput.toUpperCase();
+	}
+	const companyIdRaw = await promptUser(
+		"Company ID / enterprise number (e.g. BE0123456789 or 0123456789, optional)",
+	);
 	const description = await promptUser("Account description (optional, press Enter to skip)");
+
+	// Format company ID: strip "BE" prefix, dots, spaces → 10 digits → prepend "0" for 11-char CODA field
+	const companyId = formatCompanyId(companyIdRaw);
 
 	const config: Record<string, unknown> = {
 		accountIban: normalizedIban,
@@ -660,7 +721,7 @@ async function cmdInit(flags: Record<string, string>): Promise<void> {
 	};
 
 	if (bankId) config.bankId = bankId;
-	if (bic) config.bic = bic;
+	if (bicFinal) config.bic = bicFinal;
 	if (companyId) config.companyId = companyId;
 	if (description) config.accountDescription = description;
 	if (inferredOpeningBalance !== undefined) config.openingBalance = inferredOpeningBalance;
